@@ -1,6 +1,51 @@
+# Dependencies
 node_modules/
+
+# Build output
 .next/
 dist/
+out/
+
+# Environment files (keep .env.example)
 .env
-*.log
+.env.local
+.env.*.local
+web/.env
+
+# Database
 pgdata/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Docker
+*.pid
+
+# Prisma
+web/prisma/migrations/migration_lock.toml
+
+# TypeScript
+*.tsbuildinfo
+
+# Next.js
+web/.next/
+web/out/
+
+# Agent build
+agent/dist/
+agent/node_modules/
+
+# Misc
+*.bak
+*.tmp
