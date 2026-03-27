@@ -1,0 +1,86 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Turk {
+  id           String   @id @default(uuid())
+  name         String
+  type         String   @default("testing-agent")
+  status       String   @default("stopped") // stopped | starting | running | paused | error
+  containerId  String?
+  targetUrl    String
+  instructions String
+  ollamaModel  String   @default("llama3")
+  avatar       String   @default("turk-1.png")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  credentials TurkCredential[]
+  messages    Message[]
+  taskRuns    TaskRun[]
+}
+
+model CredentialGroup {
+  id        String   @id @default(uuid())
+  name      String // e.g., "Client 1 Login"
+  createdAt DateTime @default(now())
+
+  fields CredentialField[]
+  turks  TurkCredential[]
+}
+
+model CredentialField {
+  id       String          @id @default(uuid())
+  groupId  String
+  group    CredentialGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  key      String // e.g., "username", "password"
+  value    String // AES-256-GCM encrypted
+  isSecret Boolean         @default(false)
+}
+
+model TurkCredential {
+  turkId  String
+  turk    Turk            @relation(fields: [turkId], references: [id], onDelete: Cascade)
+  groupId String
+  group   CredentialGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@id([turkId, groupId])
+}
+
+model Message {
+  id        String   @id @default(uuid())
+  turkId    String
+  turk      Turk     @relation(fields: [turkId], references: [id], onDelete: Cascade)
+  role      String // user | agent | system
+  content   String
+  metadata  Json?
+  createdAt DateTime @default(now())
+}
+
+model TaskRun {
+  id          String    @id @default(uuid())
+  turkId      String
+  turk        Turk      @relation(fields: [turkId], references: [id], onDelete: Cascade)
+  status      String    @default("running") // running | completed | failed
+  summary     String?
+  startedAt   DateTime  @default(now())
+  completedAt DateTime?
+
+  steps TaskStep[]
+}
+
+model TaskStep {
+  id         String   @id @default(uuid())
+  runId      String
+  run        TaskRun  @relation(fields: [runId], references: [id], onDelete: Cascade)
+  action     String // navigate, click, fill, screenshot, assert
+  target     String?
+  result     String?
+  screenshot String? // base64
+  createdAt  DateTime @default(now())
+}
