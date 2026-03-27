@@ -63,7 +63,7 @@ export function Sidebar() {
       </nav>
 
       <div className="p-4 border-t border-gray-800">
-        <p className="text-xs text-gray-600">Powered by Ollama</p>
+        <p className="text-xs text-gray-600">Powered by OpenClaw + Ollama</p>
       </div>
     </aside>
   );

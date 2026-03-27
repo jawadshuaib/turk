@@ -18,16 +18,21 @@ pgdata/
 # Logs
 *.log
 npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
 # OS files
 .DS_Store
 Thumbs.db
+._*
 
 # IDE
 .vscode/
 .idea/
 *.swp
 *.swo
+*.vim
+*~
 
 # Docker
 *.pid
@@ -43,9 +48,35 @@ web/.next/
 web/out/
 
 # Agent build
-agent/dist/
 agent/node_modules/
+
+# Bridge dependencies (installed in Docker)
+agent/bridge/node_modules/
+
+# Shared package
+shared/node_modules/
+shared/dist/
+
+# OpenClaw (runtime state - never commit)
+.openclaw/
+agent/workspace-templates/*.local.*
+
+# Secrets & credentials
+*.pem
+*.key
+*.cert
+credentials.json
+secrets.json
+
+# Test output
+coverage/
+.nyc_output/
+test-results/
+
+# Claude Code
+.claude/
 
 # Misc
 *.bak
 *.tmp
+*.orig

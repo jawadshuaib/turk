@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
 
   // Mask secret values if fields are included
   if (includeFields) {
-    for (const group of groups as Array<{
+    for (const group of groups as unknown as Array<{
       fields: Array<{ isSecret: boolean; value: string }>;
     }>) {
       for (const field of group.fields) {

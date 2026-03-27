@@ -8,11 +8,10 @@ import { EnhanceInstructions } from "@/components/enhance-instructions";
 type OllamaModel = { name: string };
 
 const FALLBACK_MODELS = [
-  "llama3",
-  "llama3:70b",
-  "mistral",
-  "codellama",
-  "qwen2",
+  "llama3.1:8b",
+  "llama3.1:70b",
+  "qwen2.5:14b",
+  "mistral:7b",
 ];
 
 export default function NewTurkPage() {
@@ -24,7 +23,7 @@ export default function NewTurkPage() {
     name: "",
     targetUrl: "",
     instructions: "",
-    ollamaModel: "llama3",
+    ollamaModel: "llama3.1:8b",
     credentialGroupIds: [] as string[],
   });
 

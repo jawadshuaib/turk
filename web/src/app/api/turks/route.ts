@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
       name,
       targetUrl,
       instructions,
-      ollamaModel: ollamaModel || "llama3",
+      ollamaModel: ollamaModel || "llama3.1:8b",
       avatar,
       type: "testing-agent",
       credentials: credentialGroupIds?.length

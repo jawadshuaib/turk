@@ -5,13 +5,13 @@
 <img src="https://upload.wikimedia.org/wikipedia/commons/6/6e/Racknitz_-_The_Turk_3.jpg" alt="The Mechanical Turk — a chess-playing automaton from 1770" width="500" />
 
 *The original Mechanical Turk (1770) — a chess-playing "automaton" by Wolfgang von Kempelen.
-Spoiler: there was a human hiding inside. Ours uses Ollama instead.*
+Spoiler: there was a human hiding inside. Ours uses [OpenClaw](https://openclaw.ai/) instead.*
 
 </div>
 
 ---
 
-Turk provides AI-powered employees that perform real work autonomously. Each "turk" is an isolated Docker container with a browser, an LLM brain (via local Ollama), and a specific role.
+Turk provides AI-powered employees that perform real work autonomously. Each "turk" is an isolated Docker container running an [OpenClaw](https://openclaw.ai/) agent with a browser, an LLM brain (via local Ollama or cloud providers), and a specific role.
 
 The first turk type is a **Testing Agent** — an autonomous QA tester that navigates your website like a human would, clicking through flows, filling forms, checking for bugs, and reporting issues in real time.
 
@@ -30,7 +30,7 @@ The first turk type is a **Testing Agent** — an autonomous QA tester that navi
 |                      Host Machine                       |
 |                                                         |
 |  +-------------+                                        |
-|  |   Ollama    |  Local LLM (llama3, mistral, etc.)     |
+|  |   Ollama    |  Local LLM (llama3.1, mistral, etc.)   |
 |  |   :11434    |                                        |
 |  +------+------+                                        |
 |         |                                               |
@@ -43,73 +43,98 @@ The first turk type is a **Testing Agent** — an autonomous QA tester that navi
 |  |  +---+-----------+                              |    |
 |  |      |  WebSocket + Docker API                  |    |
 |  |      |                                          |    |
-|  |  +---+------------+  +----------------+         |    |
-|  |  | turk-agent-1   |  | turk-agent-2   |  ...   |    |
-|  |  | Playwright     |  | Playwright     |         |    |
-|  |  | + Chrome       |  | + Chrome       |         |    |
-|  |  +----------------+  +----------------+         |    |
+|  |  +---+-------------------+  +----------------+  |    |
+|  |  | turk-agent-1          |  | turk-agent-2   |  |    |
+|  |  | OpenClaw Gateway      |  | OpenClaw       |  |    |
+|  |  | + Bridge + Chromium   |  | + Bridge       |  |    |
+|  |  | + Skills + Memory     |  | + Chromium     |  |    |
+|  |  +-----------------------+  +----------------+  |    |
 |  ===================================================    |
 +---------------------------------------------------------+
 ```
 
-- **Web app** manages turks and provides a real-time dashboard
-- **Each agent** runs in its own container with Playwright + headless Chrome
-- **Ollama** runs on the host — agents reach it via `host.docker.internal`
-- **WebSocket** provides live communication between the UI and agents
-- **Credentials** are AES-256-GCM encrypted at rest
+Each agent container runs:
+- **OpenClaw Gateway** — the AI agent runtime with ReAct loop, tool calling, and memory
+- **Bridge process** — translates OpenClaw events into Turk's WebSocket protocol
+- **Chromium** — headless browser controlled by OpenClaw's built-in browser tool
+- **Custom skills** — `turk-reporter` for logging bugs, `qa-testing` for methodology
+
+The web app provides:
+- **Real-time dashboard** with live WebSocket activity stream
+- **AES-256-GCM encrypted** credential storage
+- **Persistent memory** per turk via Docker volumes (agents learn across runs)
+- **"Enhance with AI"** — Ollama-powered prompt enhancement for instructions
 
 ## Prerequisites
 
 - [Docker](https://docs.docker.com/get-docker/) and Docker Compose
 - [Ollama](https://ollama.ai/) installed and running locally
-- A pulled model (e.g., `ollama pull llama3`)
+- [Node.js](https://nodejs.org/) 18+ (for local development)
+
+> **Important:** `llama3` does NOT support tool calling. Use `llama3.1:8b` or newer.
 
 ## Quick Start
 
+### Automated Setup (recommended)
+
 ```bash
-# 1. Clone and enter the project
+git clone <repo-url> turk
 cd turk
+chmod +x setup.sh && ./setup.sh
+```
 
-# 2. Copy environment file and generate an encryption key
-cp .env.example .env
-# Replace ENCRYPTION_KEY with output of: openssl rand -hex 32
+The setup script handles everything:
+- Checks prerequisites (Docker, Node.js, Ollama)
+- Creates `.env` with a generated encryption key
+- Installs web dependencies
+- Starts PostgreSQL and pushes the database schema
+- Builds the OpenClaw agent Docker image
+- Pulls a tool-calling Ollama model if none found
 
-# 3. Make sure Ollama is running
-ollama serve
+Then start the app:
 
-# 4. Build the agent Docker image
-docker build -t turk-agent ./agent
-
-# 5. Start the web app and database
-docker compose up -d
-
-# 6. Run database migrations (first time only)
-docker compose exec web npx prisma db push
-
-# 7. Open the dashboard
+```bash
+ollama serve          # if not already running
+cd web && node server.js
 open http://localhost:3124
 ```
 
-### Local Development (without Docker Compose for the web app)
+### Using Claude Code
+
+If you have [Claude Code](https://claude.com/claude-code), you can set up the entire project with a single prompt:
+
+```
+Clone and set up this project. Run setup.sh to configure everything, then start the web server.
+```
+
+Claude Code reads `CLAUDE.md` for project context and knows how to run all the setup commands.
+
+### Manual Setup
 
 ```bash
-# Start just the database
+# 1. Clone and enter
+cd turk
+
+# 2. Create env file and generate encryption key
+cp .env.example .env
+# Set ENCRYPTION_KEY to output of: openssl rand -hex 32
+# Change DATABASE_URL to use localhost instead of db
+
+# 3. Make sure Ollama is running with a tool-capable model
+ollama serve
+ollama pull llama3.1:8b
+
+# 4. Build the OpenClaw agent Docker image
+docker build -t turk-openclaw -f agent/Dockerfile.openclaw ./agent
+
+# 5. Start PostgreSQL
 docker compose up db -d
 
-# Install web dependencies
-cd web && npm install
+# 6. Install deps and push schema
+cd web && npm install && npx prisma db push
 
-# Copy the local env file
-# (web/.env should point to localhost:5432)
-
-# Push the schema to the database
-npx prisma db push
-
-# Build the agent image
-cd .. && docker build -t turk-agent ./agent
-
-# Start the dev server
-cd web && node server.js
+# 7. Start the web server
+node server.js
 ```
 
 ## Usage
@@ -127,9 +152,10 @@ cd web && node server.js
    Test that the session persists after page refresh.
    Check all navigation links on the dashboard.
    ```
-5. Select an Ollama model
-6. Optionally attach credential groups
-7. Click **Create Turk**
+5. Click **"Enhance with AI"** to have Ollama improve your instructions
+6. Select an Ollama model (must support tool calling — `llama3.1:8b` or newer)
+7. Optionally attach credential groups
+8. Click **Create Turk**
 
 ### Managing Credentials
 
@@ -144,7 +170,7 @@ cd web && node server.js
 ### Running a Test
 
 1. Open a turk's detail page
-2. Click **Start** — this spins up a Docker container with Chrome
+2. Click **Start** — this spins up a Docker container with OpenClaw + Chrome
 3. Watch the **Activity** panel for real-time updates:
    - Agent thoughts (reasoning)
    - Actions taken (navigate, click, fill)
@@ -158,21 +184,24 @@ cd web && node server.js
 
 ### What the Agent Tests
 
-The Testing Agent behaves like a human QA tester:
+The Testing Agent behaves like a senior human QA engineer:
 
 - Navigates the site and explores all reachable pages
 - Clicks buttons, fills forms, follows links
 - Monitors the browser console for JavaScript errors
 - Detects failed network requests
-- Verifies text content via assertions
 - Reports bugs with severity levels (critical, major, minor, cosmetic)
 - Takes screenshots to document findings
 - Uses provided credentials to test authenticated flows
+- **Remembers** findings across runs (persistent memory via Docker volumes)
+- Follows a systematic methodology (smoke test -> functional -> edge cases -> accessibility)
 
 ## Project Structure
 
 ```
 turk/
+├── setup.sh                        # Automated setup (run this first)
+├── CLAUDE.md                       # Claude Code project guide
 ├── docker-compose.yml              # Web + PostgreSQL
 ├── .env.example                    # Configuration template
 │
@@ -194,23 +223,25 @@ turk/
 │       │       ├── resume/         # Resume agent
 │       │       └── findings/       # Bug reports & findings
 │       ├── components/
-│       │   ├── turk-chat.tsx       # Live activity stream + findings panel
+│       │   ├── turk-chat.tsx       # Live activity stream + findings
 │       │   ├── turk-controls.tsx   # Start/pause/resume/stop buttons
-│       │   ├── turk-instructions.tsx
+│       │   ├── enhance-instructions.tsx  # AI prompt enhancement
 │       │   └── turk-avatar.tsx
 │       └── lib/
 │           ├── docker.ts           # Container orchestration
-│           ├── encryption.ts       # Credential encryption
+│           ├── encryption.ts       # AES-256-GCM credential encryption
 │           └── db.ts               # Prisma client
 │
-└── agent/                          # Testing agent runtime
-    ├── Dockerfile                  # Playwright + Chrome
-    └── src/
-        ├── index.ts                # Entry point
-        ├── browser.ts              # Playwright browser wrapper
-        ├── ollama-client.ts        # LLM integration
-        ├── task-runner.ts          # Autonomous testing loop
-        └── ws-client.ts            # WebSocket client
+└── agent/                          # OpenClaw agent runtime
+    ├── Dockerfile.openclaw         # OpenClaw + Chromium + Bridge
+    ├── entrypoint.sh               # Generates workspace, starts Gateway
+    ├── bridge/
+    │   └── index.js                # OpenClaw <-> Turk WS translator
+    └── skills/
+        ├── turk-reporter/          # Bug reporting skill
+        │   └── SKILL.md
+        └── qa-testing/             # QA methodology skill
+            └── SKILL.md
 ```
 
 ## Configuration
@@ -218,25 +249,32 @@ turk/
 | Variable | Description | Default |
 |---|---|---|
 | `DATABASE_URL` | PostgreSQL connection string | `postgresql://turk:turk@db:5432/turk` |
-| `ENCRYPTION_KEY` | 256-bit hex key for credential encryption | — (required) |
+| `ENCRYPTION_KEY` | 256-bit hex key for credential encryption | — (required, auto-generated by setup.sh) |
 | `OLLAMA_BASE_URL` | Ollama API endpoint | `http://host.docker.internal:11434` |
 | `WS_URL` | WebSocket URL for agent containers | `ws://host.docker.internal:3124/api/ws` |
 | `DOCKER_SOCKET` | Docker socket path | `/var/run/docker.sock` |
 
 > **Note:** When running locally, `localhost` in target URLs is automatically rewritten to `host.docker.internal` so agent containers can reach services on your host machine.
 
-## Development
+## How OpenClaw Powers Each Turk
 
-```bash
-# Install web dependencies
-cd web && npm install
+Each turk container runs a full [OpenClaw](https://openclaw.ai/) instance. When you click "Start":
 
-# Run database locally (requires running Postgres via Docker)
-npx prisma db push
+1. **Workspace files are generated** from your turk's config:
+   - `SOUL.md` — agent identity and personality
+   - `AGENTS.md` — your testing instructions + methodology
+   - `USER.md` — credentials and context
+   - `TOOLS.md` — tool usage guidance
+2. **OpenClaw Gateway starts** inside the container
+3. **Bridge process connects** the Gateway to the Turk web server via WebSocket
+4. **Initial prompt is sent** — the agent begins testing
+5. **Events stream in real-time** — thoughts, actions, bug reports, screenshots
 
-# Start dev server
-node server.js
-```
+The agent uses OpenClaw's ReAct loop (reason -> act -> observe -> repeat) with:
+- Built-in **browser tool** (CDP-based, more capable than raw Playwright)
+- Built-in **memory system** (daily + long-term `.md` files persisted across runs)
+- Custom **turk-reporter skill** for structured bug reporting
+- Custom **qa-testing skill** with systematic methodology
 
 ## Roadmap
 
@@ -245,17 +283,16 @@ node server.js
 - [ ] Test report generation (PDF/HTML)
 - [ ] Scheduled/recurring test runs
 - [ ] Screenshot diff comparison between runs
-- [ ] Support for Claude API as an alternative LLM backend
-- [ ] Multi-page test plans with step-by-step verification
+- [ ] Cloud LLM support (Claude, GPT) via OpenClaw's provider system
+- [ ] Multi-agent parallel testing (OpenClaw sub-agents)
 - [ ] Team access controls and audit logging
 
 ---
 
 <div align="center">
 
-<img src="https://upload.wikimedia.org/wikipedia/commons/9/98/Turk-engraving5.jpg" alt="Copper engraving of the Mechanical Turk" width="400" />
-
-*"Any sufficiently advanced automation is indistinguishable from a tiny person hiding in a box."*
-*— probably not Arthur C. Clarke*
+| <img src="https://upload.wikimedia.org/wikipedia/commons/9/98/Turk-engraving5.jpg" alt="Copper engraving of the Mechanical Turk" width="300" /> | <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/8/8b/Racknitz_-_The_Turk_2.jpg/440px-Racknitz_-_The_Turk_2.jpg" alt="The Turk's mechanism" width="300" /> |
+|:---:|:---:|
+| *"Any sufficiently advanced automation is indistinguishable from a tiny person hiding in a box."* | *The mechanism revealed — 254 years later, the mechanism is OpenClaw + Ollama* |
 
 </div>

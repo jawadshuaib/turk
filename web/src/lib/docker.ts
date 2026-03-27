@@ -4,7 +4,7 @@ const docker = new Dockerode({
   socketPath: process.env.DOCKER_SOCKET || "/var/run/docker.sock",
 });
 
-const AGENT_IMAGE = "turk-agent";
+const AGENT_IMAGE = "turk-openclaw";
 const NETWORK_NAME = "turk_turk-net"; // docker compose prefixes with project name
 
 interface StartConfig {
@@ -13,6 +13,12 @@ interface StartConfig {
   instructions: string;
   ollamaModel: string;
   credentials: Record<string, Record<string, string>>;
+}
+
+function hostify(url: string): string {
+  return url
+    .replace("localhost", "host.docker.internal")
+    .replace("127.0.0.1", "host.docker.internal");
 }
 
 export async function startTurkContainer(
@@ -32,13 +38,16 @@ export async function startTurkContainer(
   // Base64 encode instructions and credentials to avoid env var escaping issues
   const env = [
     `TURK_ID=${config.turkId}`,
-    `TARGET_URL=${config.targetUrl.replace("localhost", "host.docker.internal").replace("127.0.0.1", "host.docker.internal")}`,
+    `TARGET_URL=${hostify(config.targetUrl)}`,
     `INSTRUCTIONS_B64=${Buffer.from(config.instructions).toString("base64")}`,
     `OLLAMA_MODEL=${config.ollamaModel}`,
-    `OLLAMA_BASE_URL=${(process.env.OLLAMA_BASE_URL || "http://host.docker.internal:11434").replace("localhost", "host.docker.internal").replace("127.0.0.1", "host.docker.internal")}`,
-    `WS_URL=${(process.env.WS_URL || "ws://host.docker.internal:3124/api/ws").replace("localhost", "host.docker.internal").replace("127.0.0.1", "host.docker.internal")}`,
+    `OLLAMA_BASE_URL=${hostify(process.env.OLLAMA_BASE_URL || "http://host.docker.internal:11434")}`,
+    `WS_URL=${hostify(process.env.WS_URL || "ws://host.docker.internal:3124/api/ws")}`,
     `CREDENTIALS_B64=${Buffer.from(JSON.stringify(config.credentials)).toString("base64")}`,
   ];
+
+  // Named volume for persistent agent memory across runs
+  const memoryVolume = `turk-memory-${config.turkId.slice(0, 12)}`;
 
   const container = await docker.createContainer({
     Image: AGENT_IMAGE,
@@ -47,9 +56,12 @@ export async function startTurkContainer(
     HostConfig: {
       NetworkMode: NETWORK_NAME,
       ExtraHosts: ["host.docker.internal:host-gateway"],
-      Memory: 2 * 1024 * 1024 * 1024, // 2GB
-      CpuQuota: 100000, // 1 CPU
-      ShmSize: 256 * 1024 * 1024, // 256MB shared memory for Chrome
+      Memory: 3 * 1024 * 1024 * 1024, // 3GB (OpenClaw + Chromium need more)
+      CpuQuota: 200000, // 2 CPUs
+      ShmSize: 512 * 1024 * 1024, // 512MB shared memory for Chrome
+      Binds: [
+        `${memoryVolume}:/home/node/.openclaw/workspace/memory`,
+      ],
     },
   });
 

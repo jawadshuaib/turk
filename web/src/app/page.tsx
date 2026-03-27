@@ -17,7 +17,7 @@ export default async function Dashboard() {
     bugs: await prisma.message.count({
       where: {
         role: "agent",
-        content: { startsWith: "BUG [" },
+        metadata: { path: ["kind"], equals: "bug_report" },
       },
     }),
   };

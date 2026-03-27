@@ -1,0 +1,51 @@
+FROM node:24-slim
+
+# System dependencies for Chromium / OpenClaw browser tool
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    ca-certificates \
+    chromium \
+    fonts-liberation \
+    libnss3 \
+    libatk-bridge2.0-0 \
+    libdrm2 \
+    libxkbcommon0 \
+    libgbm1 \
+    libx11-xcb1 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxrandr2 \
+    libasound2 \
+    libpango-1.0-0 \
+    libcairo2 \
+    libcups2 \
+    libdbus-1-3 \
+    libatspi2.0-0 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install OpenClaw globally
+RUN npm install -g openclaw@2026.3.24
+
+# Set up home directory structure for OpenClaw
+ENV HOME=/home/node
+RUN mkdir -p /home/node/.openclaw/workspace/memory \
+             /home/node/.openclaw/skills
+
+# Copy custom skills
+COPY skills/turk-reporter/ /home/node/.openclaw/skills/turk-reporter/
+COPY skills/qa-testing/ /home/node/.openclaw/skills/qa-testing/
+
+# Copy bridge process (translates OpenClaw events to Turk WS protocol)
+WORKDIR /app/bridge
+COPY bridge/package.json ./
+RUN npm install --production
+COPY bridge/ ./
+
+# Copy entrypoint
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+# OpenClaw Gateway port
+EXPOSE 18789
+
+ENTRYPOINT ["/entrypoint.sh"]

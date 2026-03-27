@@ -39,6 +39,7 @@ export function TurkChat({
   const wsRef = useRef<WebSocket | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const reconnectRef = useRef<ReturnType<typeof setTimeout>>();
+  const stepCountRef = useRef(0);
 
   // Extract findings from initial messages
   useEffect(() => {
@@ -127,7 +128,7 @@ export function TurkChat({
               description: (meta.description as string) || "",
               step: Array.isArray(meta.steps)
                 ? (meta.steps as string[]).join(" -> ")
-                : `Step ${stepCount}`,
+                : `Step ${stepCountRef.current}`,
               createdAt: msg.createdAt,
             };
             setFindings((prev) => [...prev, finding]);
@@ -151,6 +152,7 @@ export function TurkChat({
 
         if (data.type === "step_count") {
           setStepCount(data.count);
+          stepCountRef.current = data.count;
         }
       } catch {
         // ignore malformed messages
@@ -158,7 +160,8 @@ export function TurkChat({
     };
 
     wsRef.current = ws;
-  }, [turkId, stepCount]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [turkId]);
 
   useEffect(() => {
     connectWS();
@@ -420,7 +423,7 @@ function ChatMessage({ msg }: { msg: Message }) {
     return (
       <div className="px-3 py-2">
         <p className="text-gray-500 text-xs mb-1">📸 Screenshot captured</p>
-        {meta?.base64 && (
+        {typeof meta?.base64 === "string" && (
           <img
             src={`data:image/png;base64,${meta.base64}`}
             alt="Screenshot"

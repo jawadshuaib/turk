@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(req: NextRequest) {
-  const { instructions, targetUrl } = await req.json();
+  const { instructions, targetUrl, model } = await req.json();
 
   if (!instructions?.trim()) {
     return NextResponse.json(
@@ -12,6 +12,22 @@ export async function POST(req: NextRequest) {
 
   const ollamaUrl =
     process.env.OLLAMA_BASE_URL || "http://localhost:11434";
+
+  // Use the provided model, or detect the first available one
+  let ollamaModel = model || "llama3.1:8b";
+  if (!model) {
+    try {
+      const tagsRes = await fetch(`${ollamaUrl}/api/tags`);
+      if (tagsRes.ok) {
+        const tags = await tagsRes.json();
+        if (tags.models?.length > 0) {
+          ollamaModel = tags.models[0].name;
+        }
+      }
+    } catch {
+      // use default
+    }
+  }
 
   const systemPrompt = `You are an expert QA test engineer. The user has written rough testing instructions for an AI agent that will autonomously test a website using a browser. Your job is to enhance these instructions to be more thorough, specific, and actionable.
 
@@ -28,18 +44,24 @@ Rules:
   const userPrompt = `${targetUrl ? `Target website: ${targetUrl}\n\n` : ""}Original instructions:\n${instructions}\n\nPlease enhance these testing instructions.`;
 
   try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 120000); // 2 min timeout
+
     const response = await fetch(`${ollamaUrl}/api/chat`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: "llama3",
+        model: ollamaModel,
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },
         ],
         stream: false,
       }),
+      signal: controller.signal,
     });
+
+    clearTimeout(timeout);
 
     if (!response.ok) {
       const text = await response.text();
@@ -54,6 +76,12 @@ Rules:
 
     return NextResponse.json({ enhanced });
   } catch (err) {
+    if (err instanceof Error && err.name === "AbortError") {
+      return NextResponse.json(
+        { error: "Request timed out. Your Ollama model may be too slow for this prompt." },
+        { status: 504 }
+      );
+    }
     return NextResponse.json(
       {
         error:
