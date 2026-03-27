@@ -2,10 +2,9 @@
 
 <div align="center">
 
-<img src="https://upload.wikimedia.org/wikipedia/commons/6/6e/Racknitz_-_The_Turk_3.jpg" alt="The Mechanical Turk — a chess-playing automaton from 1770" width="500" />
+<img src="web/public/avatars/turk-6.png" alt="The Turk — AI Employee" width="300" />
 
-*The original Mechanical Turk (1770) — a chess-playing "automaton" by Wolfgang von Kempelen.
-Spoiler: there was a human hiding inside. Ours uses [OpenClaw](https://openclaw.ai/) instead.*
+*Meet the Turk — your AI employee powered by [OpenClaw](https://openclaw.ai/) + Ollama.*
 
 </div>
 
@@ -17,9 +16,9 @@ The first turk type is a **Testing Agent** — an autonomous QA tester that navi
 
 <div align="center">
 
-| <img src="https://upload.wikimedia.org/wikipedia/commons/a/a4/Tuerkischer_schachspieler_racknitz3.jpg" alt="Interior of the Mechanical Turk" width="280" /> | <img src="https://upload.wikimedia.org/wikipedia/commons/2/2f/Kempelen_chess1.jpg" alt="The Turk playing chess" width="280" /> |
-|:---:|:---:|
-| *Inside the machine — our turks have nothing to hide (except encrypted credentials)* | *The Turk in action — just like our agents browsing your website* |
+| <img src="web/public/avatars/turk-1.png" alt="Turk Agent 1" width="200" /> | <img src="web/public/avatars/turk-3.png" alt="Turk Agent 3" width="200" /> | <img src="web/public/avatars/turk-5.png" alt="Turk Agent 5" width="200" /> |
+|:---:|:---:|:---:|
+| *The Gentleman Tester* | *The Vintage Inspector* | *The Mechanical QA* |
 
 </div>
 
@@ -291,8 +290,8 @@ The agent uses OpenClaw's ReAct loop (reason -> act -> observe -> repeat) with:
 
 <div align="center">
 
-| <img src="https://upload.wikimedia.org/wikipedia/commons/9/98/Turk-engraving5.jpg" alt="Copper engraving of the Mechanical Turk" width="300" /> | <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/8/8b/Racknitz_-_The_Turk_2.jpg/440px-Racknitz_-_The_Turk_2.jpg" alt="The Turk's mechanism" width="300" /> |
-|:---:|:---:|
-| *"Any sufficiently advanced automation is indistinguishable from a tiny person hiding in a box."* | *The mechanism revealed — 254 years later, the mechanism is OpenClaw + Ollama* |
+| <img src="web/public/avatars/turk-2.png" alt="Turk Agent 2" width="200" /> | <img src="web/public/avatars/turk-4.png" alt="Turk Agent 4" width="200" /> | <img src="web/public/avatars/turk-6.png" alt="Turk Agent 6" width="200" /> |
+|:---:|:---:|:---:|
+| *"I found 47 bugs before my first coffee break."* | *"Your CSS is off by 2 pixels. You're welcome."* | *"I don't sleep. I don't eat. I just test."* |
 
 </div>
