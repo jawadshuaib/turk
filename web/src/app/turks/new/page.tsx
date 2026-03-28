@@ -1,47 +1,101 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { CredentialPicker } from "@/components/credential-picker";
 import { EnhanceInstructions } from "@/components/enhance-instructions";
 
 type OllamaModel = { name: string };
 
-const FALLBACK_MODELS = [
-  "llama3.1:8b",
-  "llama3.1:70b",
-  "qwen2.5:14b",
-  "mistral:7b",
-];
-
 export default function NewTurkPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
-  const [models, setModels] = useState<string[]>(FALLBACK_MODELS);
+  const [models, setModels] = useState<string[]>([]);
   const [ollamaOnline, setOllamaOnline] = useState<boolean | null>(null);
+  const [customModel, setCustomModel] = useState("");
+  const [useCustom, setUseCustom] = useState(false);
+  const [pulling, setPulling] = useState(false);
+  const [pullProgress, setPullProgress] = useState("");
   const [form, setForm] = useState({
     name: "",
     targetUrl: "",
     instructions: "",
-    ollamaModel: "llama3.1:8b",
+    ollamaModel: "",
     credentialGroupIds: [] as string[],
   });
 
-  useEffect(() => {
+  const fetchModels = useCallback(() => {
     fetch("/api/ollama/models")
       .then((r) => r.json())
       .then((data: OllamaModel[]) => {
         if (data.length > 0) {
-          setModels(data.map((m) => m.name));
+          const names = data.map((m) => m.name);
+          setModels(names);
           setOllamaOnline(true);
-          // Default to first available model
-          setForm((f) => ({ ...f, ollamaModel: data[0].name }));
+          setForm((f) => ({
+            ...f,
+            ollamaModel: f.ollamaModel || names[0],
+          }));
         } else {
           setOllamaOnline(false);
         }
       })
       .catch(() => setOllamaOnline(false));
   }, []);
+
+  useEffect(() => {
+    fetchModels();
+  }, [fetchModels]);
+
+  async function handlePull() {
+    const modelName = customModel.trim();
+    if (!modelName) return;
+    setPulling(true);
+    setPullProgress("Starting pull...");
+    try {
+      const res = await fetch("/api/ollama/pull", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model: modelName }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Pull failed");
+      }
+      const reader = res.body?.getReader();
+      if (!reader) throw new Error("No response stream");
+      const decoder = new TextDecoder();
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const text = decoder.decode(value, { stream: true });
+        for (const line of text.split("\n").filter(Boolean)) {
+          try {
+            const msg = JSON.parse(line);
+            if (msg.total && msg.completed) {
+              const pct = Math.round((msg.completed / msg.total) * 100);
+              setPullProgress(`${msg.status} ${pct}%`);
+            } else if (msg.status) {
+              setPullProgress(msg.status);
+            }
+          } catch { /* ignore parse errors */ }
+        }
+      }
+      setPullProgress("Done! Refreshing models...");
+      // Refresh model list and select the new model
+      fetchModels();
+      setForm((f) => ({ ...f, ollamaModel: modelName }));
+      setUseCustom(false);
+      setCustomModel("");
+      setPullProgress("");
+    } catch (err) {
+      setPullProgress(
+        `Error: ${err instanceof Error ? err.message : "Pull failed"}`
+      );
+    } finally {
+      setPulling(false);
+    }
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -131,23 +185,77 @@ export default function NewTurkPage() {
 
         <div>
           <label className="label">Ollama Model</label>
-          <select
-            className="input w-full"
-            value={form.ollamaModel}
-            onChange={(e) =>
-              setForm({ ...form, ollamaModel: e.target.value })
-            }
-          >
-            {models.map((model) => (
-              <option key={model} value={model}>
-                {model}
-              </option>
-            ))}
-          </select>
-          {ollamaOnline && (
-            <p className="text-gray-600 text-xs mt-1">
-              {models.length} model(s) available from Ollama
-            </p>
+          {!useCustom ? (
+            <>
+              <select
+                className="input w-full"
+                value={form.ollamaModel}
+                onChange={(e) =>
+                  setForm({ ...form, ollamaModel: e.target.value })
+                }
+              >
+                {models.length === 0 && (
+                  <option value="" disabled>
+                    No models available
+                  </option>
+                )}
+                {models.map((model) => (
+                  <option key={model} value={model}>
+                    {model}
+                  </option>
+                ))}
+              </select>
+              <div className="flex items-center justify-between mt-1">
+                {ollamaOnline && (
+                  <p className="text-gray-600 text-xs">
+                    {models.length} model(s) available from Ollama
+                  </p>
+                )}
+                <button
+                  type="button"
+                  className="text-turk-400 hover:text-turk-300 text-xs underline"
+                  onClick={() => setUseCustom(true)}
+                >
+                  Pull a different model
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  className="input flex-1"
+                  placeholder="e.g., llama3.1:8b, qwen3:14b"
+                  value={customModel}
+                  onChange={(e) => setCustomModel(e.target.value)}
+                  disabled={pulling}
+                />
+                <button
+                  type="button"
+                  className="btn-primary whitespace-nowrap"
+                  onClick={handlePull}
+                  disabled={pulling || !customModel.trim()}
+                >
+                  {pulling ? "Pulling..." : "Pull Model"}
+                </button>
+              </div>
+              {pullProgress && (
+                <p className={`text-xs mt-1 ${pullProgress.startsWith("Error") ? "text-red-400" : "text-gray-400"}`}>
+                  {pullProgress}
+                </p>
+              )}
+              <button
+                type="button"
+                className="text-gray-500 hover:text-gray-300 text-xs underline mt-1"
+                onClick={() => {
+                  setUseCustom(false);
+                  setPullProgress("");
+                }}
+              >
+                Back to available models
+              </button>
+            </>
           )}
         </div>
 

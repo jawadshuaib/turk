@@ -364,9 +364,8 @@ app.prepare().then(() => {
         wss.handleUpgrade(request, socket, head, (ws) => {
           registerSocket(ws, turkId, role);
         });
-      } else {
-        socket.destroy();
       }
+      // Let Next.js HMR and other upgrade requests pass through
     } catch (err) {
       console.error("[WS] Upgrade error:", err.message);
       socket.destroy();

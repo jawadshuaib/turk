@@ -20,6 +20,13 @@ TARGET_URL="${TARGET_URL:-http://example.com}"
 OLLAMA_MODEL="${OLLAMA_MODEL:-llama3}"
 OLLAMA_BASE_URL="${OLLAMA_BASE_URL:-http://host.docker.internal:11434}"
 
+# Browser env vars for headless Chromium in Docker
+export CHROME_PATH=/usr/bin/chromium
+export CHROMIUM_FLAGS="--no-sandbox --headless --disable-gpu --disable-dev-shm-usage"
+export PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+export OPENCLAW_BROWSER_HEADLESS=1
+export CHROMIUM_ADDITIONAL_ARGS="--no-sandbox --disable-setuid-sandbox --disable-dev-shm-usage --disable-gpu"
+
 echo "[Turk] Target: ${TARGET_URL}"
 echo "[Turk] Model: ${OLLAMA_MODEL}"
 echo "[Turk] Ollama: ${OLLAMA_BASE_URL}"
@@ -161,6 +168,24 @@ cat > /home/node/.openclaw/openclaw.json << EOF
     "bind": "loopback",
     "mode": "local"
   },
+  "browser": {
+    "enabled": true,
+    "headless": true,
+    "noSandbox": true,
+    "executablePath": "/usr/bin/chromium",
+    "defaultProfile": "headless",
+    "remoteCdpTimeoutMs": 10000,
+    "remoteCdpHandshakeTimeoutMs": 10000,
+    "ssrfPolicy": {
+      "dangerouslyAllowPrivateNetwork": true
+    },
+    "profiles": {
+      "headless": {
+        "cdpUrl": "http://127.0.0.1:9222",
+        "color": "#FF4500"
+      }
+    }
+  },
   "agents": {
     "defaults": {
       "workspace": "/home/node/.openclaw/workspace",
@@ -185,6 +210,33 @@ EOF
 # Validate config
 echo "[Turk] Validating OpenClaw config..."
 openclaw config validate 2>&1 || echo "[Turk] WARNING: Config validation failed, proceeding anyway"
+
+# --- Start headless Chromium with CDP for OpenClaw ---
+echo "[Turk] Starting headless Chromium..."
+chromium \
+  --headless \
+  --no-sandbox \
+  --disable-setuid-sandbox \
+  --disable-gpu \
+  --disable-dev-shm-usage \
+  --remote-debugging-address=127.0.0.1 \
+  --remote-debugging-port=9222 \
+  --no-first-run \
+  --no-default-browser-check \
+  --disable-background-networking \
+  --disable-extensions \
+  --window-size=1280,800 \
+  about:blank &
+CHROME_PID=$!
+
+# Wait for CDP to be ready
+for i in $(seq 1 15); do
+  if curl -fsS http://127.0.0.1:9222/json/version > /dev/null 2>&1; then
+    echo "[Turk] Chromium CDP ready after ${i}s"
+    break
+  fi
+  sleep 1
+done
 
 # --- Start OpenClaw Gateway in background ---
 echo "[Turk] Starting OpenClaw Gateway..."
@@ -233,6 +285,6 @@ echo "[Turk] Agent running. Waiting for completion..."
 wait -n $GATEWAY_PID $BRIDGE_PID 2>/dev/null || true
 
 echo "[Turk] Process exited, shutting down..."
-kill $GATEWAY_PID $BRIDGE_PID 2>/dev/null || true
+kill $GATEWAY_PID $BRIDGE_PID $CHROME_PID 2>/dev/null || true
 wait 2>/dev/null
 echo "[Turk] Shutdown complete"

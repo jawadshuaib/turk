@@ -23,6 +23,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libatspi2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
+# Chromium needs --no-sandbox in Docker; set env vars so all tools find it
+ENV CHROME_PATH=/usr/bin/chromium
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+ENV CHROMIUM_FLAGS="--no-sandbox --headless --disable-gpu --disable-dev-shm-usage"
+ENV OPENCLAW_BROWSER_HEADLESS=1
+
+# Increase shared memory for Chromium (default 64MB is too small)
+# Note: also use --shm-size=256m when running the container
+
 # Install OpenClaw globally
 RUN npm install -g openclaw@2026.3.24
 

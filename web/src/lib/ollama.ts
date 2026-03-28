@@ -1,5 +1,5 @@
 const OLLAMA_BASE_URL =
-  process.env.OLLAMA_BASE_URL || "http://host.docker.internal:11434";
+  process.env.OLLAMA_BASE_URL || "http://localhost:11434";
 
 export interface OllamaModel {
   name: string;
@@ -29,4 +29,18 @@ export async function checkOllamaHealth(): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+export async function pullModel(
+  modelName: string
+): Promise<ReadableStream<Uint8Array> | null> {
+  const res = await fetch(`${OLLAMA_BASE_URL}/api/pull`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name: modelName }),
+  });
+  if (!res.ok) {
+    throw new Error(`Ollama pull failed: ${res.statusText}`);
+  }
+  return res.body;
 }

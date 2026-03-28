@@ -43,6 +43,7 @@ let isPaused = false;
 let pendingMessages = []; // queued during pause
 let turkWs = null;
 let agentBusy = false; // true while an openclaw agent command is running
+let completionSent = false; // true when agent sends a summary/completion
 
 // ─── Turk WebSocket ──────────────────────────────────────────────────────────
 
@@ -175,21 +176,30 @@ function sendToOpenClaw(message) {
 
   let stdout = "";
   let stderr = "";
+  let jsonBuffer = ""; // Buffer for incomplete JSON lines
 
   child.stdout.on("data", (chunk) => {
     const text = chunk.toString();
     stdout += text;
 
-    // Try to parse streaming JSON lines
-    const lines = text.split("\n").filter((l) => l.trim());
+    // Append to buffer and try to extract complete JSON lines
+    jsonBuffer += text;
+    const lines = jsonBuffer.split("\n");
+    // Keep the last (potentially incomplete) line in the buffer
+    jsonBuffer = lines.pop() || "";
+
     for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+
       try {
-        const event = JSON.parse(line);
+        const event = JSON.parse(trimmed);
         handleOpenClawEvent(event);
       } catch {
-        // Not JSON — could be plain text response
-        if (line.trim().length > 0) {
-          sendToTurk({ kind: "thought", content: line.trim() });
+        // Not valid JSON — only forward if it looks like meaningful text
+        // (not raw JSON fragments like `},` or `"name": "foo",`)
+        if (isMeaningfulText(trimmed)) {
+          sendToTurk({ kind: "thought", content: trimmed });
         }
       }
     }
@@ -198,9 +208,13 @@ function sendToOpenClaw(message) {
   child.stderr.on("data", (chunk) => {
     const text = chunk.toString();
     stderr += text;
-    // Forward important stderr messages (like timeout) to the UI
-    if (text.includes("timed out") || text.includes("error") || text.includes("Error")) {
-      sendToTurk({ kind: "error", message: text.trim().substring(0, 300) });
+    // Only forward actual errors, not routine warnings
+    const lines = text.split("\n");
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (trimmed && (trimmed.includes("timed out") || trimmed.includes("[tools]"))) {
+        sendToTurk({ kind: "error", message: trimmed.substring(0, 300) });
+      }
     }
   });
 
@@ -225,14 +239,60 @@ function sendToOpenClaw(message) {
       sendToTurk({ kind: "thought", content: stdout.trim() });
     }
 
-    // Process any pending messages
-    if (!isPaused && pendingMessages.length > 0) {
-      const next = pendingMessages.shift();
-      setTimeout(() => sendToOpenClaw(next), 1000);
+    // Process any pending messages, or auto-continue testing
+    if (!isPaused) {
+      if (pendingMessages.length > 0) {
+        const next = pendingMessages.shift();
+        setTimeout(() => sendToOpenClaw(next), 1000);
+      } else if (!completionSent) {
+        // Auto-continue: send a follow-up prompt to keep testing
+        setTimeout(() => {
+          if (!isPaused && !completionSent) {
+            sendToOpenClaw(
+              "Continue testing from where you left off. " +
+              "If the browser failed, try a different approach. " +
+              "If you've covered all test phases, provide a final summary using turk_report with type 'summary'."
+            );
+          }
+        }, 3000);
+      }
     }
 
     console.log(`[Bridge] OpenClaw turn complete (code: ${code})`);
   });
+}
+
+// ─── Noise Filtering ────────────────────────────────────────────────────────
+
+// JSON fragments and internal metadata that should not be shown to the user
+const NOISE_PATTERNS = [
+  /^[{}\[\],]+$/, // bare braces/brackets
+  /^"[a-zA-Z]+"\s*:/, // JSON property fragments like `"name": "foo",`
+  /^[0-9]+$/, // bare numbers
+  /^\s*\}?\s*,?\s*$/, // closing braces with commas
+  /schemaChars/i,
+  /propertiesCount/i,
+  /summaryChars/i,
+  /^Config (?:valid|overwrite|write)/i,
+  /missing-meta-before-write/,
+  /^\[(?:heartbeat|health-monitor|canvas|gateway)\]/,
+  /DEPRECATED_ENDPOINT/,
+  /dbus\/bus\.cc/,
+  /object_proxy\.cc/,
+  /vkCreateInstance/,
+  /on_device_model/,
+];
+
+function isMeaningfulText(text) {
+  // Must be at least a short sentence
+  if (text.length < 15) return false;
+  // Filter out noise patterns
+  for (const pattern of NOISE_PATTERNS) {
+    if (pattern.test(text)) return false;
+  }
+  // Must contain at least one space (real sentences do)
+  if (!text.includes(" ")) return false;
+  return true;
 }
 
 // ─── Event Translation ───────────────────────────────────────────────────────
@@ -265,7 +325,9 @@ function handleOpenClawEvent(event) {
     case "delta":
     case "content_block_delta": {
       const text = event.delta?.text || event.text || event.content || "";
-      if (text) sendToTurk({ kind: "thought", content: text });
+      if (text && isMeaningfulText(text)) {
+        sendToTurk({ kind: "thought", content: text });
+      }
       break;
     }
 
@@ -296,8 +358,8 @@ function handleOpenClawEvent(event) {
       break;
 
     default:
-      // If it has content, show it
-      if (event.content && typeof event.content === "string") {
+      // If it has content, show it — but only meaningful text
+      if (event.content && typeof event.content === "string" && isMeaningfulText(event.content)) {
         sendToTurk({ kind: "thought", content: event.content });
       }
   }
@@ -353,6 +415,7 @@ function handleToolCall(call) {
     const description = params.description || JSON.stringify(params);
 
     if (reportType === "summary") {
+      completionSent = true;
       sendToTurk({
         kind: "status",
         status: "completed",
@@ -391,20 +454,49 @@ function handleToolCall(call) {
 }
 
 function handleToolResult(toolName, result) {
+  // Extract base64 screenshots from various result formats
+  const base64 = extractBase64(result);
+  if (base64 && (toolName.includes("screenshot") || toolName.includes("snapshot") || toolName.includes("browser"))) {
+    sendToTurk({ kind: "screenshot", base64 });
+    return;
+  }
+
   const resultText =
     typeof result === "string"
       ? result
       : result?.text || result?.content || JSON.stringify(result || {});
 
-  if (toolName.includes("screenshot") && result?.base64) {
-    sendToTurk({ kind: "screenshot", base64: result.base64 });
-  } else {
-    sendToTurk({
-      kind: "result",
-      success: !(result?.error || result?.isError),
-      detail: resultText.substring(0, 500),
-    });
+  const isError = !!(result?.error || result?.isError);
+  const detail = resultText.substring(0, 500);
+
+  // Don't send empty or noise results
+  if (!detail || detail === "{}" || detail === "null") return;
+
+  sendToTurk({
+    kind: "result",
+    success: !isError,
+    detail,
+  });
+}
+
+function extractBase64(result) {
+  if (!result) return null;
+  // Direct base64 field
+  if (result.base64) return result.base64;
+  // Nested in image field
+  if (result.image?.base64) return result.image.base64;
+  // Content array (OpenClaw tool result format)
+  if (Array.isArray(result.content)) {
+    for (const item of result.content) {
+      if (item.type === "image" && item.source?.data) return item.source.data;
+      if (item.base64) return item.base64;
+    }
   }
+  // Content as string that looks like base64 (very long, no spaces)
+  if (typeof result === "string" && result.length > 1000 && !result.includes(" ")) {
+    return result;
+  }
+  return null;
 }
 
 function flattenParams(params) {

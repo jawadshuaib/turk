@@ -171,6 +171,68 @@ export function TurkChat({
     };
   }, [connectWS]);
 
+  // Poll for new messages as a fallback (and to catch messages persisted by the server)
+  const lastMessageTimeRef = useRef<string>(
+    initialMessages.length > 0
+      ? initialMessages[initialMessages.length - 1].createdAt
+      : new Date(0).toISOString()
+  );
+
+  useEffect(() => {
+    // Update the ref whenever messages change
+    if (messages.length > 0) {
+      lastMessageTimeRef.current = messages[messages.length - 1].createdAt;
+    }
+  }, [messages]);
+
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(
+          `/api/turks/${turkId}/messages?after=${encodeURIComponent(lastMessageTimeRef.current)}`
+        );
+        if (!res.ok) return;
+        const newMsgs: Message[] = await res.json();
+        if (newMsgs.length > 0) {
+          setMessages((prev) => {
+            const existingIds = new Set(prev.map((m) => m.id));
+            const unique = newMsgs.filter((m) => !existingIds.has(m.id));
+            if (unique.length === 0) return prev;
+            return [...prev, ...unique];
+          });
+
+          // Update findings from polled messages
+          for (const m of newMsgs) {
+            if (!m.metadata) continue;
+            const meta = m.metadata as Record<string, unknown>;
+            if (meta.kind === "bug_report") {
+              setFindings((prev) => {
+                if (prev.some((f) => f.id === m.id)) return prev;
+                return [
+                  ...prev,
+                  {
+                    id: m.id,
+                    severity: (meta.severity as string) || "minor",
+                    title: (meta.title as string) || "Bug found",
+                    description: (meta.description as string) || m.content,
+                    step: Array.isArray(meta.steps)
+                      ? (meta.steps as string[]).join(" -> ")
+                      : "unknown",
+                    createdAt: m.createdAt,
+                  },
+                ];
+              });
+            }
+          }
+        }
+      } catch {
+        // ignore polling errors
+      }
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [turkId]);
+
   // Auto-scroll when new messages arrive
   useEffect(() => {
     if (autoScroll && scrollRef.current) {
