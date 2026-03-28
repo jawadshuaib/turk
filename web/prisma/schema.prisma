@@ -17,10 +17,13 @@ model Project {
   id          String   @id @default(uuid())
   name        String
   description String   @default("")
+  objective   String   @default("")
+  status      String   @default("draft") // draft | in_progress | completed
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  turks Turk[]
+  turks         Turk[]
+  memoryEntries MemoryEntry[]
 }
 
 model Turk {
@@ -33,15 +36,17 @@ model Turk {
   instructions String
   ollamaModel  String   @default("llama3.1:8b")
   modelSource  String   @default("local") // "local" or "cloud"
+  role         String   @default("")
   avatar       String   @default("turk-1.png")
   projectId    String?
   project      Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  credentials TurkCredential[]
-  messages    Message[]
-  taskRuns    TaskRun[]
+  credentials   TurkCredential[]
+  messages      Message[]
+  taskRuns      TaskRun[]
+  memoryEntries MemoryEntry[]
 }
 
 model CredentialGroup {
@@ -102,4 +107,22 @@ model TaskStep {
   result     String?
   screenshot String? // base64
   createdAt  DateTime @default(now())
+}
+
+model MemoryEntry {
+  id        String   @id @default(uuid())
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  turkId    String?
+  turk      Turk?    @relation(fields: [turkId], references: [id], onDelete: SetNull)
+  category  String
+  title     String
+  content   String
+  sourceUrl String?
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  @@index([projectId])
+  @@index([turkId])
+  @@index([projectId, category])
 }

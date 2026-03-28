@@ -43,6 +43,7 @@ RUN mkdir -p /home/node/.openclaw/workspace/memory \
 # Copy custom skills
 COPY skills/turk-reporter/ /home/node/.openclaw/skills/turk-reporter/
 COPY skills/qa-testing/ /home/node/.openclaw/skills/qa-testing/
+COPY skills/project-memory/ /home/node/.openclaw/skills/project-memory/
 
 # Copy bridge process (translates OpenClaw events to Turk WS protocol)
 WORKDIR /app/bridge

@@ -27,6 +27,7 @@ const ALLOWED_PATCH_FIELDS = new Set([
   "ollamaModel",
   "projectId",
   "modelSource",
+  "role",
 ]);
 
 export async function PATCH(

@@ -42,6 +42,7 @@ function NewTurkForm() {
     targetUrl: "",
     instructions: "",
     ollamaModel: "",
+    role: "",
     credentialGroupIds: [] as string[],
     projectId: preselectedProjectId,
   });
@@ -244,7 +245,7 @@ function NewTurkForm() {
       const res = await fetch("/api/turks", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, modelSource }),
+        body: JSON.stringify({ ...form, modelSource, role: form.role }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -298,6 +299,23 @@ function NewTurkForm() {
             Assign this turk to a project, or leave unassigned.
           </p>
         </div>
+
+        {/* Role - only shown when project is selected */}
+        {form.projectId && (
+          <div>
+            <label className="label">Role in Project</label>
+            <input
+              type="text"
+              className="input w-full"
+              placeholder="e.g., Seeking Alpha News Scraper, Valuation Analyst, Risk Assessor"
+              value={form.role}
+              onChange={(e) => setForm({ ...form, role: e.target.value })}
+            />
+            <p className="text-slate-400 text-xs mt-1">
+              Describe this turk&apos;s specialized purpose within the project.
+            </p>
+          </div>
+        )}
 
         <div>
           <label className="label">Name</label>

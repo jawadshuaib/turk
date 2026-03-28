@@ -90,6 +90,9 @@ async function handleMessage(msg, senderRole, turkId) {
         case "error":
           content = `Error: ${data.message || data.content}`;
           break;
+        case "memory_entry":
+          content = `[Memory: ${data.category}] ${data.title}`;
+          break;
         case "screenshot":
           content = "Captured screenshot";
           break;
@@ -109,6 +112,30 @@ async function handleMessage(msg, senderRole, turkId) {
           metadata: data,
         },
       });
+
+      // --- Create MemoryEntry if this is a memory_entry message ---
+      if (data.kind === "memory_entry") {
+        try {
+          const turk = await prisma.turk.findUnique({
+            where: { id: turkId },
+            select: { projectId: true },
+          });
+          if (turk?.projectId) {
+            await prisma.memoryEntry.create({
+              data: {
+                projectId: turk.projectId,
+                turkId: turkId,
+                category: data.category || "general",
+                title: data.title || "Untitled",
+                content: data.content || "",
+                sourceUrl: data.sourceUrl || null,
+              },
+            });
+          }
+        } catch (err) {
+          console.error("[WS] Error creating memory entry:", err.message);
+        }
+      }
 
       // --- Create TaskStep for trackable actions ---
       const runId = await getActiveRunId(turkId);
@@ -205,6 +232,30 @@ async function handleMessage(msg, senderRole, turkId) {
               data: { status: "stopped" },
             })
             .catch(() => {});
+
+          // Auto-complete project when all turks are done
+          try {
+            const turkRecord = await prisma.turk.findUnique({
+              where: { id: turkId },
+              select: { projectId: true },
+            });
+            if (turkRecord?.projectId) {
+              const remaining = await prisma.turk.count({
+                where: {
+                  projectId: turkRecord.projectId,
+                  status: { in: ["running", "starting", "paused"] },
+                },
+              });
+              if (remaining === 0) {
+                await prisma.project.updateMany({
+                  where: { id: turkRecord.projectId, status: "in_progress" },
+                  data: { status: "completed" },
+                });
+              }
+            }
+          } catch (err) {
+            console.error("[WS] Error auto-completing project:", err.message);
+          }
 
           activeRuns.delete(turkId);
         } else {

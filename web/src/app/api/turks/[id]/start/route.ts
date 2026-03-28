@@ -46,6 +46,16 @@ export async function POST(
     credentials[tc.group.name] = group;
   }
 
+  // Fetch project objective if turk belongs to a project
+  let projectObjective = "";
+  if (turk.projectId) {
+    const project = await prisma.project.findUnique({
+      where: { id: turk.projectId },
+      select: { objective: true },
+    });
+    projectObjective = project?.objective || "";
+  }
+
   try {
     await prisma.turk.update({
       where: { id: turk.id },
@@ -59,6 +69,8 @@ export async function POST(
       ollamaModel: turk.ollamaModel,
       modelSource: turk.modelSource,
       credentials,
+      projectObjective,
+      turkRole: turk.role,
     });
 
     await prisma.turk.update({
@@ -70,6 +82,14 @@ export async function POST(
     await prisma.taskRun.create({
       data: { turkId: turk.id, status: "running" },
     });
+
+    // Auto-set project status to in_progress when first turk starts
+    if (turk.projectId) {
+      await prisma.project.updateMany({
+        where: { id: turk.projectId, status: "draft" },
+        data: { status: "in_progress" },
+      });
+    }
 
     return NextResponse.json({ containerId });
   } catch (err) {

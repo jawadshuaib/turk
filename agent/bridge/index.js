@@ -17,6 +17,8 @@ const fs = require("fs");
 const TURK_ID = process.env.TURK_ID;
 const WS_URL = process.env.WS_URL || "ws://host.docker.internal:3124/api/ws";
 const SESSION_ID = `turk-${TURK_ID}`;
+const TARGET_URL = process.env.TARGET_URL || "the target website";
+const hasProjectRole = !!process.env.TURK_ROLE_B64 || !!process.env.PROJECT_OBJECTIVE_B64;
 
 if (!TURK_ID) {
   console.error("[Bridge] Missing TURK_ID");
@@ -118,7 +120,11 @@ function handleTurkMessage(msg) {
           pendingMessages = [];
           sendToOpenClaw(combined);
         } else {
-          sendToOpenClaw("Continue testing from where you left off.");
+          sendToOpenClaw(
+            hasProjectRole
+              ? "Continue your research from where you left off."
+              : "Continue testing from where you left off."
+          );
         }
         break;
       case "stop":
@@ -245,14 +251,22 @@ function sendToOpenClaw(message) {
         const next = pendingMessages.shift();
         setTimeout(() => sendToOpenClaw(next), 1000);
       } else if (!completionSent) {
-        // Auto-continue: send a follow-up prompt to keep testing
+        // Auto-continue: send a follow-up prompt
         setTimeout(() => {
           if (!isPaused && !completionSent) {
-            sendToOpenClaw(
-              "Continue testing from where you left off. " +
-              "If the browser failed, try a different approach. " +
-              "If you've covered all test phases, provide a final summary using turk_report with type 'summary'."
-            );
+            if (hasProjectRole) {
+              sendToOpenClaw(
+                "Continue your research from where you left off. " +
+                "If you've found new data, save it with project_memory. " +
+                "If you've covered everything, provide a final summary using turk_report with type 'summary'."
+              );
+            } else {
+              sendToOpenClaw(
+                "Continue testing from where you left off. " +
+                "If the browser failed, try a different approach. " +
+                "If you've covered all test phases, provide a final summary using turk_report with type 'summary'."
+              );
+            }
           }
         }, 3000);
       }
@@ -435,6 +449,19 @@ function handleToolCall(call) {
     return;
   }
 
+  // project_memory skill
+  if (name === "project_memory" || name === "project-memory") {
+    console.log(`[Bridge] Memory entry: ${params.category || "general"} — ${params.title || "Untitled"}`);
+    sendToTurk({
+      kind: "memory_entry",
+      category: params.category || "general",
+      title: params.title || "Memory Entry",
+      content: params.content || JSON.stringify(params),
+      sourceUrl: params.sourceUrl || params.source_url || null,
+    });
+    return;
+  }
+
   // Browser tools
   if (name.includes("browser") || name.includes("navigate") || name.includes("click") || name.includes("snapshot") || name.includes("screenshot")) {
     const action = name.replace("browser.", "").replace("browser_", "");
@@ -516,15 +543,25 @@ console.log(`[Bridge] Gateway token: ${GATEWAY_TOKEN ? GATEWAY_TOKEN.substring(0
 
 connectToTurk();
 
-// Send the initial testing prompt after a delay (let WS connect first)
-const TARGET_URL = process.env.TARGET_URL || "the target website";
+// Send the initial prompt after a delay (let WS connect first)
 setTimeout(() => {
-  console.log("[Bridge] Sending initial testing prompt...");
-  sendToOpenClaw(
-    `Begin testing ${TARGET_URL}. Follow the methodology in AGENTS.md. ` +
-    `Start by navigating to the target URL, take a snapshot to see what's on the page, ` +
-    `and begin systematic testing. Report every finding using the turk_report tool.`
-  );
+  if (hasProjectRole) {
+    console.log("[Bridge] Sending initial research prompt...");
+    sendToOpenClaw(
+      `Begin your research task at ${TARGET_URL}. Follow the instructions in AGENTS.md. ` +
+      `Navigate to the target URL, take a snapshot to understand the page, and begin gathering data. ` +
+      `Use the project_memory tool to save EVERY useful finding to the project memory bank. ` +
+      `Be thorough and include full details, not just summaries. ` +
+      `When you have gathered all available data, provide a final summary using turk_report with type 'summary'.`
+    );
+  } else {
+    console.log("[Bridge] Sending initial testing prompt...");
+    sendToOpenClaw(
+      `Begin testing ${TARGET_URL}. Follow the methodology in AGENTS.md. ` +
+      `Start by navigating to the target URL, take a snapshot to see what's on the page, ` +
+      `and begin systematic testing. Report every finding using the turk_report tool.`
+    );
+  }
 }, 5000);
 
 // Clean shutdown

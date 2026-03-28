@@ -165,6 +165,12 @@ export default async function TurkDetailPage({
                   <span className="text-slate-400">Unassigned</span>
                 )}
               </p>
+              {turk.role && (
+                <p className="text-slate-500">
+                  Role:{" "}
+                  <span className="text-indigo-600">{turk.role}</span>
+                </p>
+              )}
               <p className="text-slate-500">
                 Model:{" "}
                 <span className="text-slate-700">{turk.ollamaModel}</span>

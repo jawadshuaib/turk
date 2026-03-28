@@ -14,7 +14,7 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
-  const { name, targetUrl, instructions, ollamaModel, modelSource, credentialGroupIds, projectId } =
+  const { name, targetUrl, instructions, ollamaModel, modelSource, credentialGroupIds, projectId, role } =
     body;
 
   if (!name || !targetUrl || !instructions) {
@@ -45,6 +45,7 @@ export async function POST(req: NextRequest) {
       instructions,
       ollamaModel: ollamaModel || "llama3.1:8b",
       modelSource: modelSource === "cloud" ? "cloud" : "local",
+      role: role?.trim() || "",
       avatar,
       type: "testing-agent",
       projectId: projectId || null,

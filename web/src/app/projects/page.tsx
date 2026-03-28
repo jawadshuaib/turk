@@ -7,7 +7,7 @@ export default async function ProjectsPage() {
   const projects = await prisma.project.findMany({
     orderBy: { createdAt: "desc" },
     include: {
-      _count: { select: { turks: true } },
+      _count: { select: { turks: true, memoryEntries: true } },
       turks: { select: { status: true } },
     },
   });
@@ -42,6 +42,11 @@ export default async function ProjectsPage() {
             const runningCount = project.turks.filter(
               (t) => t.status === "running"
             ).length;
+            const statusColor: Record<string, string> = {
+              draft: "bg-slate-100 text-slate-600",
+              in_progress: "bg-amber-100 text-amber-700",
+              completed: "bg-emerald-100 text-emerald-700",
+            };
             return (
               <Link key={project.id} href={`/projects/${project.id}`}>
                 <div className="card hover:border-turk-400 hover:shadow-md transition-all cursor-pointer">
@@ -64,9 +69,18 @@ export default async function ProjectsPage() {
                           </svg>
                         </div>
                         <div>
-                          <h3 className="text-slate-800 font-semibold text-lg">
-                            {project.name}
-                          </h3>
+                          <div className="flex items-center gap-2">
+                            <h3 className="text-slate-800 font-semibold text-lg">
+                              {project.name}
+                            </h3>
+                            <span
+                              className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${
+                                statusColor[project.status] || statusColor.draft
+                              }`}
+                            >
+                              {project.status.replace("_", " ")}
+                            </span>
+                          </div>
                           {project.description && (
                             <p className="text-slate-400 text-sm mt-0.5 line-clamp-1">
                               {project.description}
@@ -85,6 +99,11 @@ export default async function ProjectsPage() {
                           <p className="text-emerald-600 text-xs flex items-center justify-end gap-1">
                             <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
                             {runningCount} running
+                          </p>
+                        )}
+                        {project._count.memoryEntries > 0 && (
+                          <p className="text-indigo-500 text-xs">
+                            {project._count.memoryEntries} entries
                           </p>
                         )}
                       </div>

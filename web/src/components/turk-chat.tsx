@@ -480,6 +480,38 @@ function ChatMessage({ msg }: { msg: Message }) {
     );
   }
 
+  // Memory entry
+  if (kind === "memory_entry") {
+    return (
+      <div className="border border-indigo-200 rounded-lg p-3 bg-indigo-50/50">
+        <div className="flex items-center gap-2 mb-1">
+          <span className="text-indigo-600 text-xs font-bold uppercase">
+            Memory [{(meta?.category as string) || "general"}]
+          </span>
+          <span className="text-slate-400 text-xs">
+            {new Date(msg.createdAt).toLocaleTimeString()}
+          </span>
+        </div>
+        <p className="text-indigo-800 text-sm font-medium">
+          {(meta?.title as string) || "Memory Entry"}
+        </p>
+        <p className="text-indigo-600 text-xs mt-1 line-clamp-3">
+          {meta?.content as string}
+        </p>
+        {typeof meta?.sourceUrl === "string" && meta.sourceUrl && (
+          <a
+            href={meta.sourceUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-indigo-400 text-xs mt-1 underline hover:text-indigo-600 block truncate"
+          >
+            {meta.sourceUrl}
+          </a>
+        )}
+      </div>
+    );
+  }
+
   // Screenshot
   if (kind === "screenshot") {
     return (
@@ -774,6 +806,8 @@ function formatAgentUpdate(data: Record<string, unknown>): string {
       return `Status: ${data.status || data.content}`;
     case "bug_report":
       return `BUG [${data.severity}]: ${data.title}\n${data.description}`;
+    case "memory_entry":
+      return `[Memory: ${data.category}] ${data.title}`;
     default:
       return JSON.stringify(data);
   }

@@ -21,6 +21,17 @@ OLLAMA_MODEL="${OLLAMA_MODEL:-llama3.1:8b}"
 OLLAMA_BASE_URL="${OLLAMA_BASE_URL:-http://host.docker.internal:11434}"
 MODEL_SOURCE="${MODEL_SOURCE:-local}"
 OLLAMA_API_KEY="${OLLAMA_API_KEY:-}"
+if [ -n "$TURK_ROLE_B64" ]; then
+  TURK_ROLE=$(echo "$TURK_ROLE_B64" | base64 -d)
+else
+  TURK_ROLE=""
+fi
+
+if [ -n "$PROJECT_OBJECTIVE_B64" ]; then
+  PROJECT_OBJECTIVE=$(echo "$PROJECT_OBJECTIVE_B64" | base64 -d)
+else
+  PROJECT_OBJECTIVE=""
+fi
 
 # Browser env vars for headless Chromium in Docker
 export CHROME_PATH=/usr/bin/chromium
@@ -59,10 +70,29 @@ You document every finding with evidence.
 SOULEOF
 
 # --- Generate AGENTS.md (operating instructions) ---
+# Build project context block if this turk has a project role
+PROJECT_CONTEXT=""
+if [ -n "$PROJECT_OBJECTIVE" ]; then
+  PROJECT_CONTEXT="## Project Objective
+${PROJECT_OBJECTIVE}
+
+## Your Role
+${TURK_ROLE:-General Research Agent}
+
+## Key Instructions
+- Focus on your specific role within this project
+- Use the project_memory tool to save EVERY useful finding to the shared memory bank
+- Be thorough: include full data, quotes, numbers, and context — not just summaries
+- Include source URLs for all findings
+- Other team members depend on your contributions being complete and detailed
+
+"
+fi
+
 cat > /home/node/.openclaw/workspace/AGENTS.md << EOF
 # QA Testing Agent Instructions
 
-## Target Website
+${PROJECT_CONTEXT}## Target Website
 ${TARGET_URL}
 
 ## Your Task
@@ -157,6 +187,13 @@ cat > /home/node/.openclaw/workspace/TOOLS.md << EOF
 - Always take a screenshot BEFORE reporting a visual bug
 - Include reproduction steps in every bug report
 - Set appropriate severity levels
+
+## project_memory Tool
+- Use this to save findings to the project's shared memory bank
+- Every useful piece of data should be saved — err on the side of over-contributing
+- Use descriptive categories: "news", "valuation", "risk_factor", "analyst_report", "financial_data"
+- Include source URLs so findings can be verified
+- Write full content, not summaries — the memory bank is the source of truth for the final report
 
 ## Memory
 - Write important findings to the daily log so you remember across sessions

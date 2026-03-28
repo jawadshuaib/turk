@@ -8,9 +8,10 @@ export async function GET(
   const project = await prisma.project.findUnique({
     where: { id: params.id },
     include: {
+      _count: { select: { turks: true, memoryEntries: true } },
       turks: {
         orderBy: { createdAt: "desc" },
-        include: { _count: { select: { messages: true, taskRuns: true } } },
+        include: { _count: { select: { messages: true, taskRuns: true, memoryEntries: true } } },
       },
     },
   });
@@ -38,6 +39,18 @@ export async function PATCH(
     data.name = trimmed;
   }
   if (body.description !== undefined) data.description = String(body.description).trim();
+  if (body.objective !== undefined) data.objective = String(body.objective).trim();
+  if (body.status !== undefined) {
+    const validStatuses = ["draft", "in_progress", "completed"];
+    const status = String(body.status);
+    if (!validStatuses.includes(status)) {
+      return NextResponse.json(
+        { error: "status must be one of: draft, in_progress, completed" },
+        { status: 400 }
+      );
+    }
+    data.status = status;
+  }
 
   if (Object.keys(data).length === 0) {
     return NextResponse.json(

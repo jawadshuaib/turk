@@ -15,6 +15,8 @@ interface StartConfig {
   ollamaModel: string;
   modelSource: string; // "local" or "cloud"
   credentials: Record<string, Record<string, string>>;
+  projectObjective?: string;
+  turkRole?: string;
 }
 
 function hostify(url: string): string {
@@ -54,6 +56,14 @@ export async function startTurkContainer(
     `WS_URL=${hostify(process.env.WS_URL || "ws://host.docker.internal:3124/api/ws")}`,
     `CREDENTIALS_B64=${Buffer.from(JSON.stringify(config.credentials)).toString("base64")}`,
   ];
+
+  // Pass project context for research turks
+  if (config.projectObjective) {
+    env.push(`PROJECT_OBJECTIVE_B64=${Buffer.from(config.projectObjective).toString("base64")}`);
+  }
+  if (config.turkRole) {
+    env.push(`TURK_ROLE_B64=${Buffer.from(config.turkRole).toString("base64")}`);
+  }
 
   // Pass API key for cloud models (from DB or env)
   if (isCloud) {

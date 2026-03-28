@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 export default function NewProjectPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
-  const [form, setForm] = useState({ name: "", description: "" });
+  const [form, setForm] = useState({ name: "", description: "", objective: "" });
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -61,6 +61,19 @@ export default function NewProjectPage() {
             value={form.description}
             onChange={(e) => setForm({ ...form, description: e.target.value })}
           />
+        </div>
+
+        <div>
+          <label className="label">Objective (optional)</label>
+          <textarea
+            className="textarea w-full h-24"
+            placeholder="What is the end goal of this project? e.g., Research MSFT stock by gathering news, analyst reports, valuation data, and risk factors from multiple sources."
+            value={form.objective}
+            onChange={(e) => setForm({ ...form, objective: e.target.value })}
+          />
+          <p className="text-slate-400 text-xs mt-1">
+            The objective is shared with all turks in this project to guide their research focus.
+          </p>
         </div>
 
         <div className="flex gap-3 pt-4">
