@@ -8,6 +8,7 @@ export async function GET(
   const turk = await prisma.turk.findUnique({
     where: { id: params.id },
     include: {
+      project: { select: { id: true, name: true } },
       credentials: { include: { group: { include: { fields: true } } } },
       messages: { orderBy: { createdAt: "desc" }, take: 50 },
     },
@@ -24,6 +25,8 @@ const ALLOWED_PATCH_FIELDS = new Set([
   "targetUrl",
   "instructions",
   "ollamaModel",
+  "projectId",
+  "modelSource",
 ]);
 
 export async function PATCH(
@@ -38,6 +41,11 @@ export async function PATCH(
     if (ALLOWED_PATCH_FIELDS.has(key)) {
       data[key] = body[key];
     }
+  }
+
+  // Sanitize modelSource to only valid values
+  if ("modelSource" in data) {
+    data.modelSource = data.modelSource === "cloud" ? "cloud" : "local";
   }
 
   if (Object.keys(data).length === 0) {

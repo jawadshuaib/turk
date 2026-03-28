@@ -79,8 +79,8 @@ export default function CredentialsPage() {
     <div className="max-w-2xl">
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-3xl font-bold text-white">Credentials</h1>
-          <p className="text-gray-400 mt-1">
+          <h1 className="text-3xl font-bold text-slate-800">Credentials</h1>
+          <p className="text-slate-500 mt-1">
             Manage login credentials for your turks
           </p>
         </div>
@@ -127,7 +127,7 @@ export default function CredentialsPage() {
                         updateField(i, { value: e.target.value })
                       }
                     />
-                    <label className="flex items-center gap-1 text-gray-400 text-xs whitespace-nowrap pt-2">
+                    <label className="flex items-center gap-1 text-slate-500 text-xs whitespace-nowrap pt-2">
                       <input
                         type="checkbox"
                         checked={field.isSecret}
@@ -141,7 +141,7 @@ export default function CredentialsPage() {
                       <button
                         type="button"
                         onClick={() => removeField(i)}
-                        className="text-red-400 hover:text-red-300 pt-2 text-sm"
+                        className="text-red-500 hover:text-red-600 pt-2 text-sm"
                       >
                         Remove
                       </button>
@@ -152,7 +152,7 @@ export default function CredentialsPage() {
               <button
                 type="button"
                 onClick={addField}
-                className="text-turk-400 text-sm mt-2 hover:text-turk-300"
+                className="text-turk-600 text-sm mt-2 hover:text-turk-700"
               >
                 + Add Field
               </button>
@@ -177,7 +177,7 @@ export default function CredentialsPage() {
       {/* List */}
       {groups.length === 0 && !showForm ? (
         <div className="card text-center py-12">
-          <p className="text-gray-400 mb-4">No credentials yet</p>
+          <p className="text-slate-500 mb-4">No credentials yet</p>
           <button className="btn-primary" onClick={() => setShowForm(true)}>
             Add your first credentials
           </button>
@@ -187,10 +187,10 @@ export default function CredentialsPage() {
           {groups.map((group) => (
             <div key={group.id} className="card">
               <div className="flex items-center justify-between mb-3">
-                <h3 className="text-white font-semibold">{group.name}</h3>
+                <h3 className="text-slate-800 font-semibold">{group.name}</h3>
                 <button
                   onClick={() => deleteGroup(group.id)}
-                  className="text-red-400 hover:text-red-300 text-sm"
+                  className="text-red-500 hover:text-red-600 text-sm"
                 >
                   Delete
                 </button>
@@ -199,12 +199,12 @@ export default function CredentialsPage() {
                 {group.fields.map((field) => (
                   <div
                     key={field.id}
-                    className="flex items-center gap-3 bg-gray-800 rounded px-3 py-2"
+                    className="flex items-center gap-3 bg-slate-50 rounded px-3 py-2"
                   >
-                    <span className="text-gray-400 text-sm font-medium min-w-[120px]">
+                    <span className="text-slate-500 text-sm font-medium min-w-[120px]">
                       {field.key}
                     </span>
-                    <span className="text-gray-300 text-sm">
+                    <span className="text-slate-700 text-sm">
                       {field.isSecret ? "••••••••" : field.value}
                     </span>
                   </div>

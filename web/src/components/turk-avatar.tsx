@@ -14,7 +14,7 @@ export function TurkAvatar({
 
   return (
     <div
-      className="rounded-full overflow-hidden bg-gray-800 border-2 border-gray-700 flex-shrink-0"
+      className="rounded-full overflow-hidden bg-slate-100 border-2 border-slate-200 flex-shrink-0"
       style={{ width: px, height: px }}
     >
       <Image

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { notFound } from "next/navigation";
 import { TurkControls } from "@/components/turk-controls";
@@ -15,6 +16,7 @@ export default async function TurkDetailPage({
   const turk = await prisma.turk.findUnique({
     where: { id: params.id },
     include: {
+      project: { select: { id: true, name: true } },
       credentials: { include: { group: { include: { fields: true } } } },
       messages: { orderBy: { createdAt: "desc" }, take: 50 },
       taskRuns: {
@@ -36,8 +38,21 @@ export default async function TurkDetailPage({
         <div className="flex items-center gap-4">
           <TurkAvatar avatar={turk.avatar} name={turk.name} size="lg" />
           <div>
-            <h1 className="text-2xl font-bold text-white">{turk.name}</h1>
-            <p className="text-gray-500 text-sm">{turk.targetUrl}</p>
+            <div className="flex items-center gap-2">
+              {turk.project && (
+                <>
+                  <Link
+                    href={`/projects/${turk.project.id}`}
+                    className="text-sm text-slate-400 hover:text-turk-600"
+                  >
+                    {turk.project.name}
+                  </Link>
+                  <span className="text-slate-300 text-sm">/</span>
+                </>
+              )}
+            </div>
+            <h1 className="text-2xl font-bold text-slate-800">{turk.name}</h1>
+            <p className="text-slate-400 text-sm">{turk.targetUrl}</p>
           </div>
         </div>
         <TurkControls turkId={turk.id} status={turk.status} />
@@ -70,22 +85,22 @@ export default async function TurkDetailPage({
 
           {/* Credentials */}
           <div className="card">
-            <h3 className="text-sm font-medium text-gray-400 mb-2">
+            <h3 className="text-sm font-medium text-slate-500 mb-2">
               Credentials
             </h3>
             {turk.credentials.length === 0 ? (
-              <p className="text-gray-600 text-sm">None attached</p>
+              <p className="text-slate-400 text-sm">None attached</p>
             ) : (
               <div className="space-y-2">
                 {turk.credentials.map((tc) => (
                   <div
                     key={tc.groupId}
-                    className="bg-gray-800 rounded px-3 py-2"
+                    className="bg-slate-50 rounded px-3 py-2"
                   >
-                    <p className="text-gray-300 text-sm font-medium">
+                    <p className="text-slate-700 text-sm font-medium">
                       {tc.group.name}
                     </p>
-                    <p className="text-gray-500 text-xs">
+                    <p className="text-slate-400 text-xs">
                       {tc.group.fields.length} fields
                     </p>
                   </div>
@@ -96,33 +111,33 @@ export default async function TurkDetailPage({
 
           {/* Recent Runs */}
           <div className="card">
-            <h3 className="text-sm font-medium text-gray-400 mb-2">
+            <h3 className="text-sm font-medium text-slate-500 mb-2">
               Recent Runs
             </h3>
             {turk.taskRuns.length === 0 ? (
-              <p className="text-gray-600 text-sm">No runs yet</p>
+              <p className="text-slate-400 text-sm">No runs yet</p>
             ) : (
               <div className="space-y-2">
                 {turk.taskRuns.map((run) => (
                   <div
                     key={run.id}
-                    className="bg-gray-800 rounded px-3 py-2 flex items-center justify-between"
+                    className="bg-slate-50 rounded px-3 py-2 flex items-center justify-between"
                   >
                     <div>
-                      <p className="text-gray-300 text-sm">
+                      <p className="text-slate-700 text-sm">
                         {run.status === "running" ? "Running..." : run.summary || "No summary"}
                       </p>
-                      <p className="text-gray-600 text-xs">
+                      <p className="text-slate-400 text-xs">
                         {run.steps.length} steps
                       </p>
                     </div>
                     <span
                       className={`text-xs px-2 py-0.5 rounded ${
                         run.status === "completed"
-                          ? "bg-green-900 text-green-300"
+                          ? "bg-emerald-50 text-emerald-600"
                           : run.status === "failed"
-                            ? "bg-red-900 text-red-300"
-                            : "bg-yellow-900 text-yellow-300"
+                            ? "bg-red-50 text-red-600"
+                            : "bg-amber-50 text-amber-600"
                       }`}
                     >
                       {run.status}
@@ -135,18 +150,36 @@ export default async function TurkDetailPage({
 
           {/* Config */}
           <div className="card">
-            <h3 className="text-sm font-medium text-gray-400 mb-2">Config</h3>
+            <h3 className="text-sm font-medium text-slate-500 mb-2">Config</h3>
             <div className="text-sm space-y-1">
-              <p className="text-gray-500">
+              <p className="text-slate-500">
+                Project:{" "}
+                {turk.project ? (
+                  <Link
+                    href={`/projects/${turk.project.id}`}
+                    className="text-turk-600 hover:text-turk-700"
+                  >
+                    {turk.project.name}
+                  </Link>
+                ) : (
+                  <span className="text-slate-400">Unassigned</span>
+                )}
+              </p>
+              <p className="text-slate-500">
                 Model:{" "}
-                <span className="text-gray-300">{turk.ollamaModel}</span>
+                <span className="text-slate-700">{turk.ollamaModel}</span>
+                {turk.modelSource === "cloud" && (
+                  <span className="ml-1.5 text-xs bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded">
+                    cloud
+                  </span>
+                )}
               </p>
-              <p className="text-gray-500">
-                Type: <span className="text-gray-300">{turk.type}</span>
+              <p className="text-slate-500">
+                Type: <span className="text-slate-700">{turk.type}</span>
               </p>
-              <p className="text-gray-500">
+              <p className="text-slate-500">
                 Created:{" "}
-                <span className="text-gray-300">
+                <span className="text-slate-700">
                   {turk.createdAt.toLocaleDateString()}
                 </span>
               </p>

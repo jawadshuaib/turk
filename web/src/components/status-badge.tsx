@@ -1,9 +1,9 @@
 const COLORS: Record<string, string> = {
-  stopped: "bg-gray-700 text-gray-300",
-  starting: "bg-yellow-900 text-yellow-300",
-  running: "bg-green-900 text-green-300",
-  paused: "bg-blue-900 text-blue-300",
-  error: "bg-red-900 text-red-300",
+  stopped: "bg-slate-100 text-slate-500",
+  starting: "bg-amber-50 text-amber-600",
+  running: "bg-emerald-50 text-emerald-600",
+  paused: "bg-blue-50 text-blue-600",
+  error: "bg-red-50 text-red-600",
 };
 
 export function StatusBadge({ status }: { status: string }) {

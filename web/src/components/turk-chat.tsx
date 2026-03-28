@@ -282,19 +282,19 @@ export function TurkChat({
   return (
     <div className="card flex flex-col flex-1 min-h-0">
       {/* Header with tabs */}
-      <div className="flex items-center justify-between mb-3 pb-3 border-b border-gray-800">
+      <div className="flex items-center justify-between mb-3 pb-3 border-b border-slate-200">
         <div className="flex items-center gap-1">
           <button
             className={`text-sm font-medium px-3 py-1 rounded-md transition-colors ${
               activeTab === "activity"
-                ? "bg-gray-800 text-white"
-                : "text-gray-500 hover:text-gray-300"
+                ? "bg-turk-50 text-turk-700"
+                : "text-slate-400 hover:text-slate-600"
             }`}
             onClick={() => setActiveTab("activity")}
           >
             Activity
             {stepCount > 0 && (
-              <span className="ml-1.5 text-xs text-gray-500">
+              <span className="ml-1.5 text-xs text-slate-400">
                 ({stepCount})
               </span>
             )}
@@ -302,8 +302,8 @@ export function TurkChat({
           <button
             className={`text-sm font-medium px-3 py-1 rounded-md transition-colors ${
               activeTab === "findings"
-                ? "bg-gray-800 text-white"
-                : "text-gray-500 hover:text-gray-300"
+                ? "bg-turk-50 text-turk-700"
+                : "text-slate-400 hover:text-slate-600"
             }`}
             onClick={() => setActiveTab("findings")}
           >
@@ -311,13 +311,13 @@ export function TurkChat({
             {findings.length > 0 && (
               <span className="ml-1.5 text-xs">
                 {bugCount > 0 && (
-                  <span className="text-red-400">{bugCount} bugs</span>
+                  <span className="text-red-500">{bugCount} bugs</span>
                 )}
                 {bugCount > 0 && failCount > 0 && (
-                  <span className="text-gray-600"> / </span>
+                  <span className="text-slate-300"> / </span>
                 )}
                 {failCount > 0 && (
-                  <span className="text-yellow-400">{failCount} failures</span>
+                  <span className="text-amber-500">{failCount} failures</span>
                 )}
               </span>
             )}
@@ -325,16 +325,16 @@ export function TurkChat({
         </div>
         <div className="flex items-center gap-2">
           {agentStatus === "running" && (
-            <span className="flex items-center gap-1.5 text-xs text-green-400">
-              <span className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse" />
+            <span className="flex items-center gap-1.5 text-xs text-emerald-600">
+              <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
               Step {stepCount}
             </span>
           )}
           <span
             className={`text-xs px-2 py-0.5 rounded ${
               connected
-                ? "bg-green-900/50 text-green-400"
-                : "bg-gray-800 text-gray-500"
+                ? "bg-emerald-50 text-emerald-600"
+                : "bg-slate-100 text-slate-400"
             }`}
           >
             {connected ? "Live" : "Reconnecting..."}
@@ -351,7 +351,7 @@ export function TurkChat({
             className="flex-1 overflow-y-auto space-y-2 mb-4 min-h-[300px] max-h-[600px] scroll-smooth"
           >
             {messages.length === 0 ? (
-              <div className="text-center text-gray-600 py-12">
+              <div className="text-center text-slate-400 py-12">
                 <p className="text-3xl mb-3">🤖</p>
                 <p>No activity yet. Start the turk to begin testing.</p>
               </div>
@@ -420,19 +420,19 @@ function ChatMessage({ msg }: { msg: Message }) {
   // Bug report - prominent display
   if (kind === "bug_report") {
     return (
-      <div className="border border-red-800/50 rounded-lg p-3 bg-red-950/30">
+      <div className="border border-red-200 rounded-lg p-3 bg-red-50">
         <div className="flex items-center gap-2 mb-1">
-          <span className="text-red-400 text-xs font-bold uppercase">
+          <span className="text-red-600 text-xs font-bold uppercase">
             🐛 Bug [{meta?.severity as string}]
           </span>
-          <span className="text-gray-600 text-xs">
+          <span className="text-slate-400 text-xs">
             {new Date(msg.createdAt).toLocaleTimeString()}
           </span>
         </div>
-        <p className="text-red-200 text-sm font-medium">
+        <p className="text-red-800 text-sm font-medium">
           {meta?.title as string}
         </p>
-        <p className="text-red-300/80 text-xs mt-1">
+        <p className="text-red-600 text-xs mt-1">
           {meta?.description as string}
         </p>
       </div>
@@ -443,18 +443,18 @@ function ChatMessage({ msg }: { msg: Message }) {
   if (kind === "action") {
     return (
       <div className="flex items-center gap-2 px-3 py-1.5">
-        <span className="text-turk-400 text-xs font-mono">→</span>
-        <span className="text-gray-300 text-sm">
-          <span className="text-turk-400 font-medium">
+        <span className="text-turk-500 text-xs font-mono">→</span>
+        <span className="text-slate-600 text-sm">
+          <span className="text-turk-600 font-medium">
             {meta?.action as string}
           </span>
-          <span className="text-gray-500 ml-1 text-xs">
+          <span className="text-slate-400 ml-1 text-xs">
             {meta?.params
               ? formatParams(meta.params as Record<string, string>)
               : ""}
           </span>
         </span>
-        <span className="text-gray-700 text-xs ml-auto">
+        <span className="text-slate-300 text-xs ml-auto">
           {new Date(msg.createdAt).toLocaleTimeString()}
         </span>
       </div>
@@ -467,12 +467,12 @@ function ChatMessage({ msg }: { msg: Message }) {
     return (
       <div className="flex items-center gap-2 px-3 py-1">
         <span
-          className={`text-xs ${success ? "text-green-400" : "text-red-400"}`}
+          className={`text-xs ${success ? "text-emerald-500" : "text-red-500"}`}
         >
           {success ? "✓" : "✗"}
         </span>
         <span
-          className={`text-xs ${success ? "text-green-300/70" : "text-red-300/70"}`}
+          className={`text-xs ${success ? "text-emerald-600" : "text-red-600"}`}
         >
           {meta?.detail as string}
         </span>
@@ -484,12 +484,12 @@ function ChatMessage({ msg }: { msg: Message }) {
   if (kind === "screenshot") {
     return (
       <div className="px-3 py-2">
-        <p className="text-gray-500 text-xs mb-1">📸 Screenshot captured</p>
+        <p className="text-slate-400 text-xs mb-1">📸 Screenshot captured</p>
         {typeof meta?.base64 === "string" && (
           <img
             src={`data:image/png;base64,${meta.base64}`}
             alt="Screenshot"
-            className="rounded border border-gray-800 max-w-full max-h-[300px]"
+            className="rounded border border-slate-200 max-w-full max-h-[300px]"
           />
         )}
       </div>
@@ -499,9 +499,9 @@ function ChatMessage({ msg }: { msg: Message }) {
   // Error
   if (kind === "error") {
     return (
-      <div className="border border-red-900/50 rounded px-3 py-2 bg-red-950/20">
-        <span className="text-red-400 text-xs font-medium">⚠ Error: </span>
-        <span className="text-red-300 text-xs">
+      <div className="border border-red-200 rounded px-3 py-2 bg-red-50">
+        <span className="text-red-600 text-xs font-medium">⚠ Error: </span>
+        <span className="text-red-500 text-xs">
           {(meta?.message as string) || (meta?.content as string) || msg.content}
         </span>
       </div>
@@ -512,7 +512,7 @@ function ChatMessage({ msg }: { msg: Message }) {
   if (kind === "status") {
     return (
       <div className="text-center py-1">
-        <span className="text-gray-500 text-xs bg-gray-800 px-3 py-0.5 rounded-full">
+        <span className="text-slate-400 text-xs bg-slate-100 px-3 py-0.5 rounded-full">
           Status: {(meta?.status as string) || (meta?.content as string)}
         </span>
       </div>
@@ -536,8 +536,8 @@ function ChatMessage({ msg }: { msg: Message }) {
   // Default agent message
   return (
     <div className="px-3 py-1">
-      <span className="text-gray-400 text-sm">{msg.content}</span>
-      <span className="text-gray-700 text-xs ml-2">
+      <span className="text-slate-500 text-sm">{msg.content}</span>
+      <span className="text-slate-300 text-xs ml-2">
         {new Date(msg.createdAt).toLocaleTimeString()}
       </span>
     </div>
@@ -559,10 +559,10 @@ function ThoughtMessage({
   // Short thoughts show inline, long ones are collapsible
   if (text.length < 80) {
     return (
-      <div className="flex items-center gap-2 px-3 py-1 text-gray-500">
+      <div className="flex items-center gap-2 px-3 py-1 text-slate-400">
         <span className="text-xs">💭</span>
         <span className="text-xs italic">{text}</span>
-        <span className="text-gray-700 text-xs ml-auto">
+        <span className="text-slate-300 text-xs ml-auto">
           {new Date(time).toLocaleTimeString()}
         </span>
       </div>
@@ -572,19 +572,19 @@ function ThoughtMessage({
   return (
     <div className="px-3 py-1">
       <button
-        className="flex items-center gap-2 text-gray-500 hover:text-gray-400 transition-colors w-full text-left"
+        className="flex items-center gap-2 text-slate-400 hover:text-slate-500 transition-colors w-full text-left"
         onClick={() => setExpanded(!expanded)}
       >
         <span className="text-xs">💭</span>
         <span className="text-xs italic truncate flex-1">
           {expanded ? text : text.slice(0, 70) + "..."}
         </span>
-        <span className="text-gray-700 text-xs">
+        <span className="text-slate-300 text-xs">
           {expanded ? "▼" : "▶"}
         </span>
       </button>
       {expanded && (
-        <p className="text-gray-500 text-xs italic mt-1 ml-6 whitespace-pre-wrap">
+        <p className="text-slate-400 text-xs italic mt-1 ml-6 whitespace-pre-wrap">
           {text}
         </p>
       )}
@@ -655,7 +655,7 @@ function FindingsPanel({
 
   if (findings.length === 0) {
     return (
-      <div className="flex-1 flex items-center justify-center text-gray-600 py-12">
+      <div className="flex-1 flex items-center justify-center text-slate-400 py-12">
         <div className="text-center">
           <p className="text-3xl mb-3">🔍</p>
           <p>No findings yet.</p>
@@ -671,12 +671,12 @@ function FindingsPanel({
     <div className="flex-1 overflow-y-auto min-h-[300px] max-h-[600px]">
       {/* Action bar */}
       <div className="flex items-center justify-between mb-3">
-        <p className="text-gray-500 text-xs">
+        <p className="text-slate-400 text-xs">
           {findings.length} finding{findings.length !== 1 ? "s" : ""}
         </p>
         <div className="flex items-center gap-2">
           <button
-            className="text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 px-2.5 py-1 rounded transition-colors"
+            className="text-xs bg-slate-100 hover:bg-slate-200 text-slate-600 px-2.5 py-1 rounded transition-colors"
             onClick={exportFindings}
           >
             ↓ Export
@@ -704,19 +704,19 @@ function FindingCard({ finding }: { finding: Finding }) {
   const [expanded, setExpanded] = useState(false);
 
   const severityColors: Record<string, string> = {
-    critical: "border-red-600 bg-red-950/50",
-    major: "border-red-800 bg-red-950/30",
-    minor: "border-yellow-800 bg-yellow-950/20",
-    cosmetic: "border-gray-700 bg-gray-800/50",
-    info: "border-blue-800 bg-blue-950/20",
+    critical: "border-red-300 bg-red-50",
+    major: "border-red-200 bg-red-50/50",
+    minor: "border-amber-200 bg-amber-50/50",
+    cosmetic: "border-slate-200 bg-slate-50",
+    info: "border-blue-200 bg-blue-50/50",
   };
 
   const severityBadge: Record<string, string> = {
     critical: "bg-red-600 text-white",
-    major: "bg-red-800 text-red-200",
-    minor: "bg-yellow-800 text-yellow-200",
-    cosmetic: "bg-gray-700 text-gray-300",
-    info: "bg-blue-800 text-blue-200",
+    major: "bg-red-100 text-red-700",
+    minor: "bg-amber-100 text-amber-700",
+    cosmetic: "bg-slate-200 text-slate-600",
+    info: "bg-blue-100 text-blue-700",
   };
 
   return (
@@ -734,19 +734,19 @@ function FindingCard({ finding }: { finding: Finding }) {
         >
           {finding.severity}
         </span>
-        <span className="text-sm text-gray-200 flex-1 truncate">
+        <span className="text-sm text-slate-700 flex-1 truncate">
           {finding.title}
         </span>
-        <span className="text-gray-700 text-xs">
+        <span className="text-slate-300 text-xs">
           {expanded ? "▼" : "▶"}
         </span>
       </div>
       {expanded && (
-        <div className="mt-2 pl-2 border-l-2 border-gray-700 ml-1">
-          <p className="text-gray-400 text-xs whitespace-pre-wrap">
+        <div className="mt-2 pl-2 border-l-2 border-slate-200 ml-1">
+          <p className="text-slate-500 text-xs whitespace-pre-wrap">
             {finding.description}
           </p>
-          <p className="text-gray-600 text-xs mt-1">
+          <p className="text-slate-400 text-xs mt-1">
             Found at: {finding.step} &middot;{" "}
             {new Date(finding.createdAt).toLocaleTimeString()}
           </p>

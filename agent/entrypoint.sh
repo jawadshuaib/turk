@@ -17,8 +17,10 @@ else
 fi
 
 TARGET_URL="${TARGET_URL:-http://example.com}"
-OLLAMA_MODEL="${OLLAMA_MODEL:-llama3}"
+OLLAMA_MODEL="${OLLAMA_MODEL:-llama3.1:8b}"
 OLLAMA_BASE_URL="${OLLAMA_BASE_URL:-http://host.docker.internal:11434}"
+MODEL_SOURCE="${MODEL_SOURCE:-local}"
+OLLAMA_API_KEY="${OLLAMA_API_KEY:-}"
 
 # Browser env vars for headless Chromium in Docker
 export CHROME_PATH=/usr/bin/chromium
@@ -29,6 +31,7 @@ export CHROMIUM_ADDITIONAL_ARGS="--no-sandbox --disable-setuid-sandbox --disable
 
 echo "[Turk] Target: ${TARGET_URL}"
 echo "[Turk] Model: ${OLLAMA_MODEL}"
+echo "[Turk] Model source: ${MODEL_SOURCE}"
 echo "[Turk] Ollama: ${OLLAMA_BASE_URL}"
 
 # --- Generate SOUL.md (identity and personality) ---
@@ -161,6 +164,26 @@ cat > /home/node/.openclaw/workspace/TOOLS.md << EOF
 EOF
 
 # --- Generate OpenClaw config ---
+# Build the ollama provider config — include apiKey only for cloud models
+if [ "$MODEL_SOURCE" = "cloud" ] && [ -n "$OLLAMA_API_KEY" ]; then
+  OLLAMA_PROVIDER_JSON=$(cat << PROVEOF
+{
+        "baseUrl": "${OLLAMA_BASE_URL}",
+        "apiKey": "${OLLAMA_API_KEY}",
+        "models": [{"id": "${OLLAMA_MODEL}", "name": "${OLLAMA_MODEL}"}]
+      }
+PROVEOF
+)
+else
+  OLLAMA_PROVIDER_JSON=$(cat << PROVEOF
+{
+        "baseUrl": "${OLLAMA_BASE_URL}",
+        "models": [{"id": "${OLLAMA_MODEL}", "name": "${OLLAMA_MODEL}"}]
+      }
+PROVEOF
+)
+fi
+
 cat > /home/node/.openclaw/openclaw.json << EOF
 {
   "gateway": {
@@ -198,10 +221,7 @@ cat > /home/node/.openclaw/openclaw.json << EOF
   },
   "models": {
     "providers": {
-      "ollama": {
-        "baseUrl": "${OLLAMA_BASE_URL}",
-        "models": [{"id": "${OLLAMA_MODEL}", "name": "${OLLAMA_MODEL}"}]
-      }
+      "ollama": ${OLLAMA_PROVIDER_JSON}
     }
   }
 }

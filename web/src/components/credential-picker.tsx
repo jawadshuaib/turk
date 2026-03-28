@@ -30,9 +30,9 @@ export function CredentialPicker({
 
   if (groups.length === 0) {
     return (
-      <p className="text-gray-600 text-sm">
+      <p className="text-slate-400 text-sm">
         No credential groups yet.{" "}
-        <a href="/credentials" className="text-turk-400 underline">
+        <a href="/credentials" className="text-turk-600 underline">
           Create one first
         </a>
         .
@@ -45,17 +45,17 @@ export function CredentialPicker({
       {groups.map((g) => (
         <label
           key={g.id}
-          className="flex items-center gap-3 bg-gray-800 rounded-lg px-4 py-3 cursor-pointer hover:bg-gray-750"
+          className="flex items-center gap-3 bg-slate-50 rounded-lg px-4 py-3 cursor-pointer hover:bg-slate-100 border border-slate-200"
         >
           <input
             type="checkbox"
             checked={selected.includes(g.id)}
             onChange={() => toggle(g.id)}
-            className="rounded border-gray-600"
+            className="rounded border-slate-300"
           />
           <div>
-            <p className="text-gray-200 text-sm font-medium">{g.name}</p>
-            <p className="text-gray-500 text-xs">{g._count.fields} fields</p>
+            <p className="text-slate-700 text-sm font-medium">{g.name}</p>
+            <p className="text-slate-400 text-xs">{g._count.fields} fields</p>
           </div>
         </label>
       ))}

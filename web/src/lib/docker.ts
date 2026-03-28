@@ -1,4 +1,5 @@
 import Dockerode from "dockerode";
+import { getApiKey, getCloudBaseUrl } from "@/lib/ollama";
 
 const docker = new Dockerode({
   socketPath: process.env.DOCKER_SOCKET || "/var/run/docker.sock",
@@ -12,6 +13,7 @@ interface StartConfig {
   targetUrl: string;
   instructions: string;
   ollamaModel: string;
+  modelSource: string; // "local" or "cloud"
   credentials: Record<string, Record<string, string>>;
 }
 
@@ -35,16 +37,31 @@ export async function startTurkContainer(
     // no existing container, that's fine
   }
 
+  // Determine Ollama URL based on model source
+  const isCloud = config.modelSource === "cloud";
+  const ollamaUrl = isCloud
+    ? getCloudBaseUrl()
+    : hostify(process.env.OLLAMA_BASE_URL || "http://host.docker.internal:11434");
+
   // Base64 encode instructions and credentials to avoid env var escaping issues
   const env = [
     `TURK_ID=${config.turkId}`,
     `TARGET_URL=${hostify(config.targetUrl)}`,
     `INSTRUCTIONS_B64=${Buffer.from(config.instructions).toString("base64")}`,
     `OLLAMA_MODEL=${config.ollamaModel}`,
-    `OLLAMA_BASE_URL=${hostify(process.env.OLLAMA_BASE_URL || "http://host.docker.internal:11434")}`,
+    `OLLAMA_BASE_URL=${ollamaUrl}`,
+    `MODEL_SOURCE=${config.modelSource || "local"}`,
     `WS_URL=${hostify(process.env.WS_URL || "ws://host.docker.internal:3124/api/ws")}`,
     `CREDENTIALS_B64=${Buffer.from(JSON.stringify(config.credentials)).toString("base64")}`,
   ];
+
+  // Pass API key for cloud models (from DB or env)
+  if (isCloud) {
+    const apiKey = await getApiKey();
+    if (apiKey) {
+      env.push(`OLLAMA_API_KEY=${apiKey}`);
+    }
+  }
 
   // Named volume for persistent agent memory across runs
   const memoryVolume = `turk-memory-${config.turkId.slice(0, 12)}`;

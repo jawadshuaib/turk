@@ -42,7 +42,7 @@ export function EnhanceInstructions({
       type="button"
       onClick={handleEnhance}
       disabled={loading}
-      className="text-turk-400 hover:text-turk-300 text-sm inline-flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-wait mt-1.5"
+      className="text-turk-600 hover:text-turk-700 text-sm inline-flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-wait mt-1.5"
     >
       {loading ? (
         <>

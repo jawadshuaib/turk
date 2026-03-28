@@ -25,6 +25,13 @@ export async function POST(
     );
   }
 
+  if (!turk.ollamaModel.trim()) {
+    return NextResponse.json(
+      { error: "Turk has no model configured" },
+      { status: 400 }
+    );
+  }
+
   // Decrypt credentials for the agent
   const credentials: Record<string, Record<string, string>> = {};
   for (const tc of turk.credentials) {
@@ -50,6 +57,7 @@ export async function POST(
       targetUrl: turk.targetUrl,
       instructions: turk.instructions,
       ollamaModel: turk.ollamaModel,
+      modelSource: turk.modelSource,
       credentials,
     });
 

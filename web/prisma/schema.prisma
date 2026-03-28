@@ -7,6 +7,22 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model Setting {
+  key       String @id
+  value     String // encrypted for sensitive values
+  updatedAt DateTime @updatedAt
+}
+
+model Project {
+  id          String   @id @default(uuid())
+  name        String
+  description String   @default("")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  turks Turk[]
+}
+
 model Turk {
   id           String   @id @default(uuid())
   name         String
@@ -16,7 +32,10 @@ model Turk {
   targetUrl    String
   instructions String
   ollamaModel  String   @default("llama3.1:8b")
+  modelSource  String   @default("local") // "local" or "cloud"
   avatar       String   @default("turk-1.png")
+  projectId    String?
+  project      Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 

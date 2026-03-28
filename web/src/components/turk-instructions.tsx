@@ -42,11 +42,11 @@ export function TurkInstructions({
   return (
     <div className="card">
       <div className="flex items-center justify-between mb-2">
-        <h3 className="text-sm font-medium text-gray-400">Instructions</h3>
+        <h3 className="text-sm font-medium text-slate-500">Instructions</h3>
         {!editing && (
           <button
             onClick={() => setEditing(true)}
-            className="text-gray-500 hover:text-gray-300 text-xs"
+            className="text-slate-400 hover:text-slate-600 text-xs"
           >
             Edit
           </button>
@@ -72,7 +72,7 @@ export function TurkInstructions({
                   setInstructions(initialInstructions);
                   setEditing(false);
                 }}
-                className="text-gray-400 hover:text-gray-300 text-xs"
+                className="text-slate-400 hover:text-slate-600 text-xs"
               >
                 Cancel
               </button>
@@ -88,7 +88,7 @@ export function TurkInstructions({
         </div>
       ) : (
         <div>
-          <p className="text-gray-300 text-sm whitespace-pre-wrap">
+          <p className="text-slate-700 text-sm whitespace-pre-wrap">
             {instructions}
           </p>
           <EnhanceInstructions

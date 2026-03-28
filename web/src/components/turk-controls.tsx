@@ -95,11 +95,11 @@ export function TurkControls({
   }
 
   const statusColors: Record<string, string> = {
-    running: "bg-green-900 text-green-300",
-    paused: "bg-yellow-900 text-yellow-300",
-    stopped: "bg-gray-700 text-gray-400",
-    error: "bg-red-900 text-red-300",
-    starting: "bg-blue-900 text-blue-300",
+    running: "bg-emerald-50 text-emerald-600",
+    paused: "bg-amber-50 text-amber-600",
+    stopped: "bg-slate-100 text-slate-500",
+    error: "bg-red-50 text-red-600",
+    starting: "bg-blue-50 text-blue-600",
   };
 
   return (
@@ -107,11 +107,11 @@ export function TurkControls({
       {/* Status badge */}
       <span
         className={`text-xs font-medium px-2.5 py-1 rounded-full ${
-          statusColors[status] || "bg-gray-700 text-gray-400"
+          statusColors[status] || "bg-slate-100 text-slate-500"
         }`}
       >
         {status === "running" && (
-          <span className="inline-block w-1.5 h-1.5 bg-green-400 rounded-full mr-1.5 animate-pulse" />
+          <span className="inline-block w-1.5 h-1.5 bg-emerald-500 rounded-full mr-1.5 animate-pulse" />
         )}
         {status.charAt(0).toUpperCase() + status.slice(1)}
       </span>
@@ -136,7 +136,7 @@ export function TurkControls({
       {status === "running" && (
         <>
           <button
-            className="bg-yellow-600 hover:bg-yellow-700 text-white font-medium py-2 px-4 rounded-lg transition-colors"
+            className="bg-amber-500 hover:bg-amber-600 text-white font-medium py-2 px-4 rounded-lg transition-colors"
             onClick={() => handleAction("pause")}
             disabled={loading !== null}
           >
