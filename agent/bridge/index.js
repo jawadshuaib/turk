@@ -202,9 +202,23 @@ function sendToOpenClaw(message) {
         const event = JSON.parse(trimmed);
         handleOpenClawEvent(event);
       } catch {
-        // Not valid JSON — only forward if it looks like meaningful text
-        // (not raw JSON fragments like `},` or `"name": "foo",`)
-        if (isMeaningfulText(trimmed)) {
+        // Check for OpenClaw's text-format tool calls:
+        // "assistant commentary to=functions.project_memory json {...}"
+        const toolCallMatch = trimmed.match(/to=functions\.(\S+)\s+json\s+(.+)/);
+        if (toolCallMatch) {
+          try {
+            const toolName = toolCallMatch[1];
+            const toolArgs = JSON.parse(toolCallMatch[2]);
+            handleToolCall({ name: toolName, input: toolArgs });
+          } catch {
+            // JSON parse of args failed, send as thought
+            if (isMeaningfulText(trimmed)) {
+              sendToTurk({ kind: "thought", content: trimmed });
+            }
+          }
+        } else if (isMeaningfulText(trimmed)) {
+          // Not valid JSON — only forward if it looks like meaningful text
+          // (not raw JSON fragments like `},` or `"name": "foo",`)
           sendToTurk({ kind: "thought", content: trimmed });
         }
       }

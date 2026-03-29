@@ -1,8 +1,7 @@
 import { prisma } from "@/lib/db";
 import { decryptValue } from "@/lib/encryption";
 
-const OLLAMA_BASE_URL =
-  process.env.OLLAMA_BASE_URL || "http://localhost:11434";
+const DEFAULT_OLLAMA_URL = "http://localhost:11434";
 
 const OLLAMA_CLOUD_URL = "https://api.ollama.com";
 
@@ -10,6 +9,23 @@ export interface OllamaModel {
   name: string;
   size: number;
   modified_at: string;
+}
+
+// ─── Base URL (DB first, then env fallback) ──────────────
+
+export async function getBaseUrl(): Promise<string> {
+  try {
+    const setting = await prisma.setting.findUnique({
+      where: { key: "OLLAMA_BASE_URL" },
+    });
+    if (setting?.value) {
+      // Not encrypted — stored as plain text
+      return setting.value.replace(/\/+$/, ""); // strip trailing slash
+    }
+  } catch {
+    // DB error — fall through to env
+  }
+  return (process.env.OLLAMA_BASE_URL || DEFAULT_OLLAMA_URL).replace(/\/+$/, "");
 }
 
 // ─── API Key (DB first, then env fallback) ───────────────
@@ -37,7 +53,8 @@ export async function hasCloudApiKey(): Promise<boolean> {
 
 export async function listModels(): Promise<OllamaModel[]> {
   try {
-    const res = await fetch(`${OLLAMA_BASE_URL}/api/tags`, {
+    const baseUrl = await getBaseUrl();
+    const res = await fetch(`${baseUrl}/api/tags`, {
       cache: "no-store",
     });
     if (!res.ok) return [];
@@ -50,7 +67,8 @@ export async function listModels(): Promise<OllamaModel[]> {
 
 export async function checkOllamaHealth(): Promise<boolean> {
   try {
-    const res = await fetch(`${OLLAMA_BASE_URL}/api/tags`, {
+    const baseUrl = await getBaseUrl();
+    const res = await fetch(`${baseUrl}/api/tags`, {
       cache: "no-store",
     });
     return res.ok;
@@ -62,7 +80,8 @@ export async function checkOllamaHealth(): Promise<boolean> {
 export async function pullModel(
   modelName: string
 ): Promise<ReadableStream<Uint8Array> | null> {
-  const res = await fetch(`${OLLAMA_BASE_URL}/api/pull`, {
+  const baseUrl = await getBaseUrl();
+  const res = await fetch(`${baseUrl}/api/pull`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ name: modelName }),

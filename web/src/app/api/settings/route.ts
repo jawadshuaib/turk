@@ -6,7 +6,7 @@ import { encryptValue, decryptValue } from "@/lib/encryption";
 const ENCRYPTED_KEYS = new Set(["OLLAMA_API_KEY"]);
 
 // Keys that are allowed to be read/written via this API
-const ALLOWED_KEYS = new Set(["OLLAMA_API_KEY"]);
+const ALLOWED_KEYS = new Set(["OLLAMA_API_KEY", "OLLAMA_BASE_URL"]);
 
 export const dynamic = "force-dynamic";
 

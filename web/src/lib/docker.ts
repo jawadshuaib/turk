@@ -1,5 +1,5 @@
 import Dockerode from "dockerode";
-import { getApiKey, getCloudBaseUrl } from "@/lib/ollama";
+import { getApiKey, getBaseUrl, getCloudBaseUrl } from "@/lib/ollama";
 
 const docker = new Dockerode({
   socketPath: process.env.DOCKER_SOCKET || "/var/run/docker.sock",
@@ -41,9 +41,10 @@ export async function startTurkContainer(
 
   // Determine Ollama URL based on model source
   const isCloud = config.modelSource === "cloud";
+  const localBaseUrl = await getBaseUrl();
   const ollamaUrl = isCloud
     ? getCloudBaseUrl()
-    : hostify(process.env.OLLAMA_BASE_URL || "http://host.docker.internal:11434");
+    : hostify(localBaseUrl);
 
   // Base64 encode instructions and credentials to avoid env var escaping issues
   const env = [
