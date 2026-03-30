@@ -183,6 +183,7 @@ function sendToOpenClaw(message) {
   let stdout = "";
   let stderr = "";
   let jsonBuffer = ""; // Buffer for incomplete JSON lines
+  let toolCallBuffer = null; // Buffer for multi-line TOOL_CALL accumulation: { name, jsonStr, depth }
 
   child.stdout.on("data", (chunk) => {
     const text = chunk.toString();
@@ -198,6 +199,56 @@ function sendToOpenClaw(message) {
       const trimmed = line.trim();
       if (!trimmed) continue;
 
+      // ── Multi-line TOOL_CALL buffering ──
+      // If we're accumulating a multi-line TOOL_CALL JSON, keep appending
+      if (toolCallBuffer) {
+        toolCallBuffer.jsonStr += "\n" + trimmed;
+        // Count braces to detect complete JSON
+        for (const ch of trimmed) {
+          if (ch === '{') toolCallBuffer.depth++;
+          else if (ch === '}') toolCallBuffer.depth--;
+        }
+        if (toolCallBuffer.depth <= 0) {
+          // JSON object is complete
+          try {
+            const toolArgs = JSON.parse(toolCallBuffer.jsonStr.trim());
+            console.log(`[Bridge] TOOL_CALL multiline: ${toolCallBuffer.name}`, JSON.stringify(toolArgs).substring(0, 200));
+            handleToolCall({ name: toolCallBuffer.name, input: toolArgs });
+          } catch (e) {
+            console.error(`[Bridge] Failed to parse multiline TOOL_CALL: ${e.message}`, toolCallBuffer.jsonStr.substring(0, 100));
+          }
+          toolCallBuffer = null;
+        }
+        continue;
+      }
+
+      // Check for TOOL_CALL:name:json text protocol (agents output this for custom tools)
+      // May have timestamp prefix from OpenClaw: "2026-03-29T23:17:55.921+00:00 TOOL_CALL:..."
+      const toolCallTextMatch = trimmed.match(/(?:^|\s)TOOL_CALL:(\w+):\s*(\{.*)$/);
+      if (toolCallTextMatch) {
+        const toolName = toolCallTextMatch[1];
+        const jsonFragment = toolCallTextMatch[2].trim();
+
+        // Try single-line parse first
+        try {
+          const toolArgs = JSON.parse(jsonFragment);
+          console.log(`[Bridge] TOOL_CALL text protocol: ${toolName}`, JSON.stringify(toolArgs).substring(0, 200));
+          handleToolCall({ name: toolName, input: toolArgs });
+        } catch {
+          // JSON incomplete — start multi-line buffer
+          let depth = 0;
+          for (const ch of jsonFragment) {
+            if (ch === '{') depth++;
+            else if (ch === '}') depth--;
+          }
+          if (depth > 0) {
+            toolCallBuffer = { name: toolName, jsonStr: jsonFragment, depth };
+          }
+          // depth <= 0 but parse failed = malformed, skip
+        }
+        continue;
+      }
+
       try {
         const event = JSON.parse(trimmed);
         handleOpenClawEvent(event);
@@ -211,14 +262,11 @@ function sendToOpenClaw(message) {
             const toolArgs = JSON.parse(toolCallMatch[2]);
             handleToolCall({ name: toolName, input: toolArgs });
           } catch {
-            // JSON parse of args failed, send as thought
             if (isMeaningfulText(trimmed)) {
               sendToTurk({ kind: "thought", content: trimmed });
             }
           }
         } else if (isMeaningfulText(trimmed)) {
-          // Not valid JSON — only forward if it looks like meaningful text
-          // (not raw JSON fragments like `},` or `"name": "foo",`)
           sendToTurk({ kind: "thought", content: trimmed });
         }
       }
@@ -240,6 +288,51 @@ function sendToOpenClaw(message) {
 
   child.on("close", (code) => {
     agentBusy = false;
+
+    // Extract TOOL_CALL from CLI response if the line parser missed them
+    if (stdout && stdout.includes("TOOL_CALL:")) {
+      // OpenClaw CLI returns JSON: {runId, status, summary, result}
+      // result contains: { payloads: [{ text: "..." }, ...] }
+      // TOOL_CALL lines are embedded in the text payloads
+      function extractAllText(obj) {
+        const texts = [];
+        if (typeof obj === "string") { texts.push(obj); return texts; }
+        if (Array.isArray(obj)) {
+          for (const item of obj) texts.push(...extractAllText(item));
+          return texts;
+        }
+        if (typeof obj === "object" && obj !== null) {
+          if (obj.payloads) texts.push(...extractAllText(obj.payloads));
+          if (typeof obj.text === "string") texts.push(obj.text);
+          if (typeof obj.content === "string") texts.push(obj.content);
+          if (typeof obj.message === "string") texts.push(obj.message);
+          if (typeof obj.output === "string") texts.push(obj.output);
+        }
+        return texts;
+      }
+
+      try {
+        // Try parsing the full stdout as JSON first
+        const jsonStartIdx = stdout.indexOf("{");
+        const jsonPart = jsonStartIdx >= 0 ? stdout.substring(jsonStartIdx) : stdout;
+        const resp = JSON.parse(jsonPart);
+
+        const textPayloads = extractAllText(resp.result);
+        const allText = [
+          resp.content, resp.summary,
+          ...textPayloads,
+        ].filter(Boolean).join("\n");
+
+        if (allText.includes("TOOL_CALL:")) {
+          console.log(`[Bridge] Extracting TOOL_CALL from response (${allText.length} chars)`);
+          parseAssistantContent(allText);
+        }
+      } catch {
+        // Not valid JSON — parse raw stdout as text
+        console.log(`[Bridge] Extracting TOOL_CALL from raw stdout`);
+        parseAssistantContent(stdout);
+      }
+    }
 
     if (code !== 0) {
       console.error(`[Bridge] OpenClaw exited with code ${code}`);
@@ -394,6 +487,68 @@ function handleOpenClawEvent(event) {
 }
 
 function parseAssistantContent(content) {
+  // Scan for TOOL_CALL: patterns in the content text
+  // The JSON may be single-line or multi-line (formatted with indentation)
+  // Use regex to find all TOOL_CALL:name: occurrences, then extract the JSON object
+  const toolCallRegex = /TOOL_CALL:(\w+):\s*(\{)/g;
+  let match;
+  let hasToolCalls = false;
+  const processedRanges = []; // track which character ranges were tool calls
+
+  while ((match = toolCallRegex.exec(content)) !== null) {
+    const toolName = match[1];
+    const jsonStart = match.index + match[0].length - 1; // position of opening {
+
+    // Extract the JSON object by counting braces
+    let depth = 0;
+    let jsonEnd = -1;
+    let inString = false;
+    let escaped = false;
+    for (let i = jsonStart; i < content.length; i++) {
+      const ch = content[i];
+      if (escaped) { escaped = false; continue; }
+      if (ch === '\\' && inString) { escaped = true; continue; }
+      if (ch === '"') { inString = !inString; continue; }
+      if (inString) continue;
+      if (ch === '{') depth++;
+      else if (ch === '}') { depth--; if (depth === 0) { jsonEnd = i; break; } }
+    }
+
+    if (jsonEnd > jsonStart) {
+      const jsonStr = content.substring(jsonStart, jsonEnd + 1).trim();
+      // Skip placeholder/example text like {json}, {..}, { ... }, etc.
+      if (jsonStr.length < 10 || !jsonStr.includes('"')) continue;
+      try {
+        const toolArgs = JSON.parse(jsonStr);
+        if (typeof toolArgs === "object" && toolArgs !== null && Object.keys(toolArgs).length > 0) {
+          hasToolCalls = true;
+          console.log(`[Bridge] TOOL_CALL in content: ${toolName}`, JSON.stringify(toolArgs).substring(0, 200));
+          handleToolCall({ name: toolName, input: toolArgs });
+          processedRanges.push([match.index, jsonEnd + 1]);
+        }
+      } catch (e) {
+        // Only log if it looked like real JSON (has quotes)
+        if (jsonStr.includes('"')) {
+          console.error(`[Bridge] Failed to parse TOOL_CALL JSON: ${e.message}`, jsonStr.substring(0, 80));
+        }
+      }
+    }
+  }
+
+  // If we found tool calls, send any remaining reasoning text
+  if (hasToolCalls) {
+    // Remove processed ranges from content to get remaining text
+    let remaining = content;
+    for (let i = processedRanges.length - 1; i >= 0; i--) {
+      remaining = remaining.substring(0, processedRanges[i][0]) + remaining.substring(processedRanges[i][1]);
+    }
+    remaining = remaining.trim();
+    if (remaining && isMeaningfulText(remaining.substring(0, 200))) {
+      sendToTurk({ kind: "thought", content: remaining.substring(0, 500) });
+    }
+    return;
+  }
+
   // Check if the content mentions tool usage, bug reports, etc.
   const lower = content.toLowerCase();
 

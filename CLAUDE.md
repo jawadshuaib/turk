@@ -2,7 +2,7 @@
 
 ## What is Turk?
 
-Turk is an AI-powered autonomous QA testing platform. Each "turk" is an isolated Docker container running an OpenClaw agent with a headless browser, an LLM brain (via local Ollama or Ollama Cloud), and a specific testing role. The web dashboard (Next.js) manages turks, projects, credentials, and streams live results via WebSocket.
+Turk is an AI-powered autonomous agent platform. Each "turk" is an isolated Docker container running an OpenClaw agent with a headless browser, an LLM brain (via local Ollama or Ollama Cloud), and a specific role (QA testing or research). The web dashboard (Next.js) manages turks, projects, credentials, and streams live results via WebSocket. Research turks save structured findings to a shared **Memory Bank** per project.
 
 ## First-Time Setup
 
@@ -67,7 +67,7 @@ Host Machine
 │       ├── Chromium (headless, CDP on :9222)
 │       ├── OpenClaw Gateway (:18789) — connects to Chromium via remote CDP profile
 │       ├── Bridge process (OpenClaw ↔ Turk WS, auto-continue loop)
-│       └── Custom skills (turk-reporter, qa-testing)
+│       └── Custom skills (turk-reporter, qa-testing, project-memory)
 ```
 
 ### Agent Container Internals
@@ -103,11 +103,15 @@ turk/
 │       ├── app/                # Pages + API routes
 │       │   ├── api/turks/[id]/ # start, stop, pause, resume, findings, messages
 │       │   ├── api/projects/   # Project CRUD
+│       │   ├── api/projects/[id]/memory/ # Memory Bank CRUD + export
 │       │   ├── api/ollama/     # models (list), pull (stream), cloud-models
-│       │   ├── api/settings/   # App settings (OLLAMA_API_KEY, etc.)
+│       │   ├── api/settings/   # App settings (OLLAMA_API_KEY, OLLAMA_BASE_URL)
+│       │   ├── settings/       # Settings page (Ollama config, API keys)
 │       │   └── turks/new/      # Create turk page (model selector + pull UI)
 │       ├── components/         # React components
-│       │   ├── turk-chat.tsx   # Live activity stream + findings + WS + polling
+│       │   ├── turk-chat.tsx   # Live activity stream + findings + memory entries
+│       │   ├── memory-bank.tsx # Memory Bank viewer + manual entry + export
+│       │   ├── sidebar.tsx     # Navigation sidebar
 │       │   └── turk-controls.tsx # Start/pause/resume/stop buttons + live status
 │       └── lib/
 │           ├── docker.ts       # Dockerode container orchestration
@@ -122,7 +126,8 @@ turk/
 │   │   └── index.js            # OpenClaw ↔ Turk WS translator with auto-continue + noise filtering
 │   └── skills/
 │       ├── turk-reporter/SKILL.md   # Bug reporting tool
-│       └── qa-testing/SKILL.md      # QA methodology
+│       ├── qa-testing/SKILL.md      # QA methodology
+│       └── project-memory/SKILL.md  # Memory Bank tool (saves research findings)
 │
 └── shared/                     # Shared TypeScript types
     └── src/
@@ -155,7 +160,7 @@ turk/
 
 ### WebSocket Protocol
 - Web server runs at `:3124` with WS upgrade on `/api/ws?turkId=X&role=agent|browser`.
-- Agent sends `agent_update` messages with kinds: `thought`, `action`, `result`, `screenshot`, `error`, `status`, `bug_report`.
+- Agent sends `agent_update` messages with kinds: `thought`, `action`, `result`, `screenshot`, `error`, `status`, `bug_report`, `memory_entry`.
 - Browser sends `user_instruction` and `control` (pause/resume/stop) messages.
 - All messages are persisted to PostgreSQL.
 - The server's upgrade handler passes through non-`/api/ws` connections (required for Next.js HMR in dev mode).
@@ -164,10 +169,14 @@ turk/
 - Each agent container runs a full OpenClaw instance with Gateway + CLI.
 - Workspace files (SOUL.md, AGENTS.md, USER.md, TOOLS.md) are generated from turk config at container start.
 - The bridge spawns `openclaw agent --session-id <id> --message <msg> --json --verbose on` for each turn.
+- The CLI returns JSON: `{runId, status, summary, result: {payloads: [{text: "..."}]}}`. The bridge extracts text from `result.payloads[].text`.
 - The bridge auto-continues after each turn (3s delay) until the agent sends a `turk_report` with `type: "summary"`.
+- **TOOL_CALL text protocol**: Since OpenClaw skills don't register as callable tools for Ollama models, the agent outputs `TOOL_CALL:tool_name:{json}` lines as text. The bridge parses these from the response payloads using a brace-counting JSON extractor that handles multi-line formatted JSON.
+- Supported tools via TOOL_CALL: `project_memory` (saves to Memory Bank), `turk_report` (findings and summaries).
 - Agent memory persists across runs via named Docker volumes (`turk-memory-<turkId>`).
 - Browser config uses a remote CDP profile pointing at pre-launched Chromium (`cdpUrl: http://127.0.0.1:9222`).
 - `ssrfPolicy.dangerouslyAllowPrivateNetwork: true` allows testing internal/private URLs.
+- Research turks receive `TURK_ROLE_B64` and `PROJECT_OBJECTIVE_B64` environment variables (base64-encoded) which are decoded in `entrypoint.sh` and injected into workspace files.
 
 ### Environment Variables
 
@@ -183,10 +192,19 @@ turk/
 **Key:** `OLLAMA_BASE_URL` must be `localhost` for local dev because the web server runs on the host. Agent containers always use `host.docker.internal` (configured separately in `docker.ts`).
 
 ### Settings & API Keys
-- App settings (like `OLLAMA_API_KEY`) are stored in the `Setting` table (key-value, encrypted for sensitive values).
-- The Ollama Cloud API key can be set from either the `.env` file or the UI. The DB value takes precedence over the env var.
+- App settings are stored in the `Setting` table (key-value, encrypted for sensitive values).
+- `OLLAMA_API_KEY` and `OLLAMA_BASE_URL` can be set from either `.env` or the **Settings** page. DB values take precedence over env vars.
 - Settings API: `GET /api/settings?key=OLLAMA_API_KEY` (check if set), `PUT /api/settings` with `{ key, value }` (set/clear).
-- Only whitelisted keys (`OLLAMA_API_KEY`) are readable/writable via the API.
+- Whitelisted keys: `OLLAMA_API_KEY`, `OLLAMA_BASE_URL`.
+- The Settings page includes a live health check for the Ollama connection.
+
+### Memory Bank
+- Research turks (those with a `turkRole` and project `objective`) save findings to the `MemoryEntry` table.
+- Each entry has: `projectId`, `turkId`, `category`, `title`, `content`, `sourceUrl`, `createdAt`.
+- Database indexes on `[projectId]`, `[turkId]`, and `[projectId, category]` for efficient queries.
+- API: `GET /api/projects/[id]/memory` (list entries), `POST` (create), `DELETE` (remove), `GET .../memory/export` (JSON export).
+- The bridge process parses `TOOL_CALL:project_memory:{...}` lines from the agent's response text. The agent outputs these as part of its assistant content, and the bridge extracts them from OpenClaw's `{runId, status, summary, result: {payloads: [{text: "..."}]}}` response structure.
+- The `memory_entry` WebSocket message kind is handled by `server.js` which creates a `MemoryEntry` record in the database.
 
 ## Manual Setup
 

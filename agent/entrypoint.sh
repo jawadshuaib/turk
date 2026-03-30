@@ -187,6 +187,10 @@ cat > /home/node/.openclaw/workspace/TOOLS.md << EOF
 - Always take a screenshot BEFORE reporting a visual bug
 - Include reproduction steps in every bug report
 - Set appropriate severity levels
+- To call this tool, output a line in exactly this format:
+  TOOL_CALL:turk_report:{"type":"finding","severity":"major","title":"...","description":"..."}
+- For the final summary, use type "summary":
+  TOOL_CALL:turk_report:{"type":"summary","severity":"none","title":"Research Complete","description":"..."}
 
 ## project_memory Tool
 - Use this to save findings to the project's shared memory bank
@@ -194,6 +198,9 @@ cat > /home/node/.openclaw/workspace/TOOLS.md << EOF
 - Use descriptive categories: "news", "valuation", "risk_factor", "analyst_report", "financial_data"
 - Include source URLs so findings can be verified
 - Write full content, not summaries — the memory bank is the source of truth for the final report
+- To call this tool, output a line in exactly this format:
+  TOOL_CALL:project_memory:{"category":"valuation","title":"...","content":"...","sourceUrl":"..."}
+- IMPORTANT: You MUST output the TOOL_CALL line for each finding. Do not write to files instead.
 
 ## Memory
 - Write important findings to the daily log so you remember across sessions
