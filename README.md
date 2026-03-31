@@ -410,12 +410,28 @@ The **Settings** page (accessible from the sidebar) lets you configure:
 - The web server itself runs on the host, so it uses `localhost` for Ollama and the database.
 - `localhost` in turk target URLs is automatically rewritten to `host.docker.internal` by `docker.ts`.
 
+## What's Next: Specialized Turks
+
+> **[Read the full design document: The Turk Investor](docs/turk-investor.md)**
+
+Today, every turk starts from zero — it has never seen the target website before. A "SeekingAlpha News Scraper" turk navigates blindly, burning tokens and time figuring out the site layout before it begins its actual task.
+
+**Trained turks would change this.** Press a button, the turk explores a website and builds a **Site Profile** — a structured document capturing page types, navigation patterns, data locations, and interaction quirks. From that point forward, any turk working on that site starts with knowledge instead of guesswork.
+
+The design document explores:
+- **Site Profiles** — reusable knowledge documents that make agents 3-5x faster on known sites
+- **Training mode** — automated site exploration that generates profiles
+- **Specialized turk types** — News Monitors, Earnings Analysts, Valuation Engines, SEC Filing Readers
+- **The Turk Investor** — a potential standalone product for financial research automation
+- **Implementation phases** — from adding profiles to the existing platform to extracting a specialized product
+
 ## Roadmap
 
 - [x] ~~Cloud LLM support~~ — Ollama Cloud supported
 - [x] ~~Project-based organization~~ — Projects feature shipped
 - [x] ~~Shared Memory Bank~~ — Research turks save findings to a shared project knowledge base
 - [x] ~~UI-configurable settings~~ — Ollama Base URL and API key manageable from Settings page
+- [ ] **Site Profiles + Training Mode** — [design doc](docs/turk-investor.md)
 - [ ] Additional turk types (monitoring agent, data entry agent)
 - [ ] Slack integration for notifications and commands
 - [ ] Test report generation (PDF/HTML)

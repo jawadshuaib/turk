@@ -5,6 +5,7 @@ import { StatusBadge } from "@/components/status-badge";
 import { TurkAvatar } from "@/components/turk-avatar";
 import { ProjectActions } from "@/components/project-actions";
 import { ProjectTabs } from "./project-tabs";
+import { InvestorProjectView } from "./investor-project-view";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +18,7 @@ export default async function ProjectDetailPage({
     where: { id: params.id },
     include: {
       _count: { select: { memoryEntries: true } },
+      investorProject: true,
       turks: {
         orderBy: { createdAt: "desc" },
         include: {
@@ -28,6 +30,21 @@ export default async function ProjectDetailPage({
 
   if (!project) return notFound();
 
+  const isInvestor = !!project.investorProject;
+
+  // For investor projects, render the investor-specific view
+  if (isInvestor) {
+    return (
+      <InvestorProjectView
+        projectId={project.id}
+        ticker={project.investorProject!.ticker}
+        companyName={project.investorProject!.companyName}
+        exchange={project.investorProject!.exchange}
+      />
+    );
+  }
+
+  // General project view
   const runningCount = project.turks.filter(
     (t) => t.status === "running"
   ).length;

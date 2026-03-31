@@ -21,6 +21,7 @@ export default async function Dashboard() {
     include: {
       _count: { select: { turks: true } },
       turks: { select: { status: true } },
+      investorProject: { select: { ticker: true } },
     },
   });
 
@@ -275,25 +276,36 @@ export default async function Dashboard() {
               const runningCount = project.turks.filter(
                 (t) => t.status === "running"
               ).length;
+              const isInvestor = !!project.investorProject;
               return (
                 <Link key={project.id} href={`/projects/${project.id}`}>
-                  <div className="card hover:border-turk-400 hover:shadow-md transition-all cursor-pointer h-full">
+                  <div className={`card hover:shadow-md transition-all cursor-pointer h-full ${
+                    isInvestor ? "hover:border-amber-400" : "hover:border-turk-400"
+                  }`}>
                     <div className="flex items-start gap-3">
-                      <div className="w-9 h-9 rounded-lg bg-turk-50 flex items-center justify-center shrink-0 mt-0.5">
-                        <svg
-                          className="w-4 h-4 text-turk-600"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"
-                          />
-                        </svg>
-                      </div>
+                      {isInvestor ? (
+                        <div className="w-9 h-9 rounded-lg bg-amber-50 border border-amber-200 flex items-center justify-center shrink-0 mt-0.5">
+                          <span className="text-amber-700 font-bold text-[10px]">
+                            {project.investorProject!.ticker}
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="w-9 h-9 rounded-lg bg-turk-50 flex items-center justify-center shrink-0 mt-0.5">
+                          <svg
+                            className="w-4 h-4 text-turk-600"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"
+                            />
+                          </svg>
+                        </div>
+                      )}
                       <div className="min-w-0">
                         <h3 className="text-slate-800 font-medium truncate">
                           {project.name}
