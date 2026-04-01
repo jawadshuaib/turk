@@ -33,6 +33,12 @@ else
   PROJECT_OBJECTIVE=""
 fi
 
+if [ -n "$MEMORY_ENTRIES_B64" ]; then
+  MEMORY_ENTRIES=$(echo "$MEMORY_ENTRIES_B64" | base64 -d)
+else
+  MEMORY_ENTRIES=""
+fi
+
 # Browser env vars for headless Chromium in Docker
 export CHROME_PATH=/usr/bin/chromium
 export CHROMIUM_FLAGS="--no-sandbox --headless --disable-gpu --disable-dev-shm-usage"
@@ -206,6 +212,28 @@ cat > /home/node/.openclaw/workspace/TOOLS.md << EOF
 - Write important findings to the daily log so you remember across sessions
 - Check previous memory files to avoid re-testing already-covered areas
 EOF
+
+# --- Generate RESEARCH_DATA.md (memory bank entries for deep-dive turks) ---
+if [ -n "$MEMORY_ENTRIES" ]; then
+  node -e "
+const entries = JSON.parse(process.argv[1]);
+if (!entries.length) process.exit(0);
+let md = '# Research Data — Memory Bank Entries\n\n';
+md += 'These are existing findings from the project memory bank.\n';
+md += 'Your task: visit each Source URL, scrape the full content, and save enriched findings.\n\n';
+for (const e of entries) {
+  md += '---\n';
+  md += '## ' + e.title + '\n';
+  md += '- **Category:** ' + e.category + '\n';
+  if (e.sourceUrl) md += '- **Source URL:** ' + e.sourceUrl + '\n';
+  const summary = e.content.length > 500 ? e.content.substring(0, 500) + '...' : e.content;
+  md += '- **Summary:** ' + summary + '\n\n';
+}
+process.stdout.write(md);
+" "$MEMORY_ENTRIES" > /home/node/.openclaw/workspace/RESEARCH_DATA.md
+  ENTRY_COUNT=$(echo "$MEMORY_ENTRIES" | node -e "let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>console.log(JSON.parse(d).length))")
+  echo "[Turk] Wrote RESEARCH_DATA.md with ${ENTRY_COUNT} entries"
+fi
 
 # --- Generate OpenClaw config ---
 # Build the ollama provider config — include apiKey only for cloud models

@@ -27,7 +27,15 @@ interface TurkData {
   role: string;
   avatar: string;
   targetUrl: string;
+  metadata: Record<string, unknown> | null;
   _count: { memoryEntries: number };
+}
+
+function isConsumerTurk(metadata: unknown): boolean {
+  if (!metadata || typeof metadata !== "object") return false;
+  const meta = metadata as Record<string, unknown>;
+  const cats = meta.memoryInputCategories;
+  return Array.isArray(cats) && cats.length > 0;
 }
 
 interface InvestorProjectData {
@@ -56,6 +64,7 @@ const categoryLabels: Record<string, string> = {
   news: "News",
   risk_factor: "Risk Factors",
   analyst_report: "Analyst Reports",
+  news_detail: "News (Deep Dive)",
 };
 
 const categoryColors: Record<string, string> = {
@@ -67,6 +76,7 @@ const categoryColors: Record<string, string> = {
   news: "bg-cyan-100 text-cyan-700",
   risk_factor: "bg-red-100 text-red-700",
   analyst_report: "bg-indigo-100 text-indigo-700",
+  news_detail: "bg-orange-100 text-orange-700",
 };
 
 export function InvestorProjectView({
@@ -90,6 +100,21 @@ export function InvestorProjectView({
   const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null);
   const [turkForm, setTurkForm] = useState({ name: "", targetUrl: "", instructions: "", role: "" });
   const [creatingTurk, setCreatingTurk] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [defaultModel, setDefaultModel] = useState({ model: "", source: "local" });
+
+  // Fetch saved model preference
+  useEffect(() => {
+    Promise.all([
+      fetch("/api/settings?key=DEFAULT_OLLAMA_MODEL").then((r) => r.json()).catch(() => ({})),
+      fetch("/api/settings?key=DEFAULT_MODEL_SOURCE").then((r) => r.json()).catch(() => ({})),
+    ]).then(([modelRes, sourceRes]) => {
+      setDefaultModel({
+        model: modelRes.value || "",
+        source: sourceRes.value || "local",
+      });
+    });
+  }, []);
 
   const fetchData = useCallback(async () => {
     try {
@@ -111,13 +136,27 @@ export function InvestorProjectView({
   async function handleRun() {
     setRunning(true);
     try {
-      const res = await fetch(`/api/projects/${projectId}/investor/run`, {
-        method: "POST",
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || "Run failed");
-      }
+      // Start M4th API analysis and start all stopped PRODUCER turks
+      // Consumer turks (with memoryInputCategories) auto-start when producers finish
+      const stoppedTurks = data?.project.turks.filter(
+        (t) => (t.status === "stopped" || t.status === "error") && !isConsumerTurk(t.metadata)
+      ) || [];
+
+      const promises: Promise<unknown>[] = [
+        fetch(`/api/projects/${projectId}/investor/run`, { method: "POST" }).then(
+          async (res) => {
+            if (!res.ok) {
+              const err = await res.json().catch(() => ({}));
+              throw new Error(err.error || "API analysis failed");
+            }
+          }
+        ),
+        ...stoppedTurks.map((turk) =>
+          fetch(`/api/turks/${turk.id}/start`, { method: "POST" }).catch(() => {})
+        ),
+      ];
+
+      await Promise.allSettled(promises);
       await fetchData();
     } catch (err) {
       alert(err instanceof Error ? err.message : "Run failed");
@@ -133,6 +172,46 @@ export function InvestorProjectView({
       router.push("/projects");
     } catch {
       alert("Failed to delete");
+    }
+  }
+
+  async function handleCopyAll() {
+    if (!data) return;
+    const entries = data.project.memoryEntries;
+    if (entries.length === 0) return;
+
+    const sections = entries.reduce<Record<string, MemoryEntry[]>>((acc, e) => {
+      if (!acc[e.category]) acc[e.category] = [];
+      acc[e.category].push(e);
+      return acc;
+    }, {});
+
+    let text = `# ${ticker} — ${companyName || ticker} Research Data\n\n`;
+
+    for (const [category, catEntries] of Object.entries(sections)) {
+      const label = categoryLabels[category] || category;
+      text += `## ${label}\n\n`;
+      for (const entry of catEntries) {
+        text += `### ${entry.title}\n`;
+        if (entry.sourceUrl) text += `Source: ${entry.sourceUrl}\n`;
+        text += `${entry.content}\n\n`;
+      }
+    }
+
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Fallback
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      document.body.removeChild(ta);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
     }
   }
 
@@ -158,20 +237,26 @@ export function InvestorProjectView({
   }
 
   async function handleCreateTurk() {
-    if (!turkForm.name || !turkForm.targetUrl || !turkForm.instructions) return;
+    const template = INVESTOR_TURK_TEMPLATES.find((t) => t.id === selectedTemplate);
+    const isConsumer = !!template?.memoryInputCategories;
+    if (!turkForm.name || (!turkForm.targetUrl && !isConsumer) || !turkForm.instructions) return;
     setCreatingTurk(true);
     try {
+      const metadata = template?.memoryInputCategories
+        ? { memoryInputCategories: template.memoryInputCategories }
+        : undefined;
       const res = await fetch("/api/turks", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: turkForm.name,
-          targetUrl: turkForm.targetUrl,
+          targetUrl: turkForm.targetUrl || "about:blank",
           instructions: turkForm.instructions,
           role: turkForm.role,
           projectId,
-          ollamaModel: "",
-          modelSource: "local",
+          ollamaModel: defaultModel.model,
+          modelSource: defaultModel.source,
+          metadata,
         }),
       });
       if (!res.ok) {
@@ -196,6 +281,9 @@ export function InvestorProjectView({
         SUGGESTED_TURK_IDS.includes(t.id)
       );
       for (const tmpl of suggestedTemplates) {
+        const metadata = tmpl.memoryInputCategories
+          ? { memoryInputCategories: tmpl.memoryInputCategories }
+          : undefined;
         const res = await fetch("/api/turks", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -205,8 +293,9 @@ export function InvestorProjectView({
             instructions: resolveSymbol(tmpl.instructions, ticker),
             role: tmpl.role,
             projectId,
-            ollamaModel: "",
-            modelSource: "local",
+            ollamaModel: defaultModel.model,
+            modelSource: defaultModel.source,
+            metadata,
           }),
         });
         if (!res.ok) {
@@ -307,6 +396,28 @@ export function InvestorProjectView({
         </div>
 
         <div className="flex items-center gap-2">
+          {entries.length > 0 && (
+            <button
+              onClick={handleCopyAll}
+              className="btn-secondary flex items-center gap-2"
+            >
+              {copied ? (
+                <>
+                  <svg className="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  Copied!
+                </>
+              ) : (
+                <>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                  </svg>
+                  Copy All
+                </>
+              )}
+            </button>
+          )}
           <button
             onClick={handleRun}
             disabled={running}
@@ -315,7 +426,7 @@ export function InvestorProjectView({
             {running ? (
               <>
                 <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                Analyzing...
+                Running...
               </>
             ) : (
               <>
@@ -323,7 +434,10 @@ export function InvestorProjectView({
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
-                {entries.length > 0 ? "Re-run Analysis" : "Run Analysis"}
+                {data.project.turks.length > 0
+                  ? entries.length > 0 ? "Re-run All" : "Run All"
+                  : entries.length > 0 ? "Re-run Analysis" : "Run Analysis"
+                }
               </>
             )}
           </button>
@@ -446,7 +560,15 @@ export function InvestorProjectView({
                 running: "bg-emerald-100 text-emerald-700",
                 paused: "bg-blue-100 text-blue-700",
                 error: "bg-red-100 text-red-700",
+                waiting: "bg-violet-100 text-violet-700",
               };
+              const isConsumer = isConsumerTurk(turk.metadata);
+              const producersActive = data.project.turks.some(
+                (t) => !isConsumerTurk(t.metadata) && ["running", "starting"].includes(t.status)
+              );
+              const showWaiting = isConsumer && turk.status === "stopped" && producersActive;
+              const displayStatus = showWaiting ? "waiting" : turk.status;
+              const displayLabel = showWaiting ? "Waiting..." : turk.status;
               return (
                 <Link key={turk.id} href={`/turks/${turk.id}`}>
                   <div className="card hover:border-turk-400 transition-colors cursor-pointer py-3">
@@ -460,9 +582,14 @@ export function InvestorProjectView({
                         <div>
                           <div className="flex items-center gap-2">
                             <span className="font-medium text-slate-800 text-sm">{turk.name}</span>
-                            <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${statusStyles[turk.status] || statusStyles.stopped}`}>
-                              {turk.status}
+                            <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${statusStyles[displayStatus] || statusStyles.stopped}`}>
+                              {displayLabel}
                             </span>
+                            {isConsumer && (
+                              <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-orange-50 text-orange-600">
+                                Phase 2
+                              </span>
+                            )}
                           </div>
                           {turk.role && (
                             <p className="text-slate-400 text-xs">{turk.role}</p>
@@ -489,12 +616,13 @@ export function InvestorProjectView({
               <>
                 <h3 className="font-medium text-slate-800 mb-3">Choose a turk template</h3>
                 <p className="text-slate-500 text-sm mb-4">
-                  Each template comes with a pre-configured URL and instructions optimized for {ticker}.
-                  The <code className="text-xs bg-slate-100 px-1 py-0.5 rounded">{STOCK_SYMBOL_PLACEHOLDER}</code> placeholder
-                  is automatically replaced with <strong>{ticker}</strong>.
+                  Each template comes with pre-configured instructions optimized for {ticker}.
                 </p>
-                <div className="grid gap-2">
-                  {INVESTOR_TURK_TEMPLATES.map((tmpl) => (
+
+                {/* Phase 1: Producers */}
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Phase 1 &mdash; Data Collectors</p>
+                <div className="grid gap-2 mb-4">
+                  {INVESTOR_TURK_TEMPLATES.filter((t) => !t.memoryInputCategories).map((tmpl) => (
                     <button
                       key={tmpl.id}
                       onClick={() => handleSelectTemplate(tmpl.id)}
@@ -502,7 +630,7 @@ export function InvestorProjectView({
                     >
                       <div className="flex items-center justify-between">
                         <div>
-                          <span className="font-medium text-slate-800 text-sm">{tmpl.name}</span>
+                          <span className="font-medium text-slate-800 text-sm">{resolveSymbol(tmpl.name, ticker)}</span>
                           <span className="text-slate-400 text-xs ml-2">{tmpl.role}</span>
                         </div>
                         <svg className="w-4 h-4 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -512,6 +640,35 @@ export function InvestorProjectView({
                       <p className="text-slate-500 text-xs mt-1">{tmpl.description}</p>
                       <p className="text-slate-400 text-xs mt-1 font-mono truncate">
                         {resolveSymbol(tmpl.defaultUrl, ticker)}
+                      </p>
+                    </button>
+                  ))}
+                </div>
+
+                {/* Phase 2: Consumers */}
+                <p className="text-xs font-semibold text-orange-600 uppercase tracking-wide mb-2">Phase 2 &mdash; Deep Dive (auto-starts after Phase 1)</p>
+                <div className="grid gap-2">
+                  {INVESTOR_TURK_TEMPLATES.filter((t) => !!t.memoryInputCategories).map((tmpl) => (
+                    <button
+                      key={tmpl.id}
+                      onClick={() => handleSelectTemplate(tmpl.id)}
+                      className="text-left p-3 rounded-lg border border-orange-200 bg-orange-50/50 hover:border-orange-400 hover:shadow-sm transition-all"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <span className="font-medium text-slate-800 text-sm">{resolveSymbol(tmpl.name, ticker)}</span>
+                          <span className="text-orange-600 text-xs ml-2">{tmpl.role}</span>
+                        </div>
+                        <svg className="w-4 h-4 text-orange-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                        </svg>
+                      </div>
+                      <p className="text-slate-500 text-xs mt-1">{tmpl.description}</p>
+                      <p className="text-orange-600 text-xs mt-1 flex items-center gap-1">
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        Reads: {tmpl.memoryInputCategories!.map((c) => categoryLabels[c] || c).join(", ")} entries from memory bank
                       </p>
                     </button>
                   ))}
@@ -545,55 +702,73 @@ export function InvestorProjectView({
                   </button>
                 </div>
                 <div className="space-y-4">
-                  <div>
-                    <label className="label">Name</label>
-                    <input
-                      type="text"
-                      className="input w-full"
-                      placeholder="e.g., SeekingAlpha News Reader"
-                      value={turkForm.name}
-                      onChange={(e) => setTurkForm({ ...turkForm, name: e.target.value })}
-                    />
-                  </div>
-                  <div>
-                    <label className="label">Role</label>
-                    <input
-                      type="text"
-                      className="input w-full"
-                      placeholder="e.g., News Monitor, Valuation Analyst"
-                      value={turkForm.role}
-                      onChange={(e) => setTurkForm({ ...turkForm, role: e.target.value })}
-                    />
-                  </div>
-                  <div>
-                    <label className="label">Target URL</label>
-                    <input
-                      type="text"
-                      className="input w-full font-mono text-sm"
-                      placeholder={`https://example.com/symbol/${STOCK_SYMBOL_PLACEHOLDER}`}
-                      value={turkForm.targetUrl}
-                      onChange={(e) => setTurkForm({ ...turkForm, targetUrl: e.target.value })}
-                    />
-                    <p className="text-slate-400 text-xs mt-1">
-                      Use <code className="bg-slate-100 px-1 py-0.5 rounded">{STOCK_SYMBOL_PLACEHOLDER}</code> in the URL — it will be replaced with <strong>{ticker}</strong> when the turk starts.
-                    </p>
-                  </div>
-                  <div>
-                    <label className="label">Instructions</label>
-                    <textarea
-                      className="textarea w-full h-40 text-sm"
-                      placeholder="Describe what this turk should research and how to report findings..."
-                      value={turkForm.instructions}
-                      onChange={(e) => setTurkForm({ ...turkForm, instructions: e.target.value })}
-                    />
-                    <p className="text-slate-400 text-xs mt-1">
-                      Context-engineered instructions tell the turk exactly what data to collect, how to navigate the site, and how to report findings.
-                    </p>
-                  </div>
+                  {(() => {
+                    const selTmpl = INVESTOR_TURK_TEMPLATES.find((t) => t.id === selectedTemplate);
+                    const isConsumerTemplate = !!selTmpl?.memoryInputCategories;
+                    return (
+                      <>
+                        <div>
+                          <label className="label">Name</label>
+                          <input
+                            type="text"
+                            className="input w-full"
+                            placeholder="e.g., SeekingAlpha News Reader"
+                            value={turkForm.name}
+                            onChange={(e) => setTurkForm({ ...turkForm, name: e.target.value })}
+                          />
+                        </div>
+                        <div>
+                          <label className="label">Role</label>
+                          <input
+                            type="text"
+                            className="input w-full"
+                            placeholder="e.g., News Monitor, Valuation Analyst"
+                            value={turkForm.role}
+                            onChange={(e) => setTurkForm({ ...turkForm, role: e.target.value })}
+                          />
+                        </div>
+                        {isConsumerTemplate ? (
+                          <div className="rounded-lg bg-orange-50 border border-orange-200 p-3">
+                            <p className="text-sm text-orange-700 font-medium">Phase 2 — URLs from Memory Bank</p>
+                            <p className="text-xs text-orange-600 mt-1">
+                              This turk automatically reads URLs from the {selTmpl!.memoryInputCategories!.map((c) => categoryLabels[c] || c).join(", ")} entries
+                              in your memory bank. No target URL needed — it will visit each source link collected by Phase 1 turks.
+                            </p>
+                          </div>
+                        ) : (
+                          <div>
+                            <label className="label">Target URL</label>
+                            <input
+                              type="text"
+                              className="input w-full font-mono text-sm"
+                              placeholder={`https://example.com/symbol/${STOCK_SYMBOL_PLACEHOLDER}`}
+                              value={turkForm.targetUrl}
+                              onChange={(e) => setTurkForm({ ...turkForm, targetUrl: e.target.value })}
+                            />
+                            <p className="text-slate-400 text-xs mt-1">
+                              Use <code className="bg-slate-100 px-1 py-0.5 rounded">{STOCK_SYMBOL_PLACEHOLDER}</code> in the URL — it will be replaced with <strong>{ticker}</strong> when the turk starts.
+                            </p>
+                          </div>
+                        )}
+                        <div>
+                          <label className="label">Instructions</label>
+                          <textarea
+                            className="textarea w-full h-40 text-sm"
+                            placeholder="Describe what this turk should research and how to report findings..."
+                            value={turkForm.instructions}
+                            onChange={(e) => setTurkForm({ ...turkForm, instructions: e.target.value })}
+                          />
+                          <p className="text-slate-400 text-xs mt-1">
+                            Context-engineered instructions tell the turk exactly what data to collect, how to navigate the site, and how to report findings.
+                          </p>
+                        </div>
+                      </>
+                    );
+                  })()}
                   <div className="flex gap-3">
                     <button
                       onClick={handleCreateTurk}
-                      disabled={creatingTurk || !turkForm.name || !turkForm.targetUrl || !turkForm.instructions}
+                      disabled={creatingTurk || !turkForm.name || (!turkForm.targetUrl && !INVESTOR_TURK_TEMPLATES.find((t) => t.id === selectedTemplate)?.memoryInputCategories) || !turkForm.instructions}
                       className="btn-primary"
                     >
                       {creatingTurk ? "Creating..." : "Create Turk"}

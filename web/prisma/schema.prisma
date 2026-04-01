@@ -38,6 +38,7 @@ model Turk {
   ollamaModel  String   @default("llama3.1:8b")
   modelSource  String   @default("local") // "local" or "cloud"
   role         String   @default("")
+  metadata    Json?
   avatar       String   @default("turk-1.png")
   projectId    String?
   project      Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)

@@ -56,6 +56,26 @@ export async function POST(
     projectObjective = project?.objective || "";
   }
 
+  // Fetch memory entries if turk has memoryInputCategories in metadata
+  let memoryEntries: Array<{ category: string; title: string; content: string; sourceUrl: string | null }> = [];
+  const turkMeta = turk.metadata as Record<string, unknown> | null;
+  const memoryCategories = (turkMeta?.memoryInputCategories as string[]) || [];
+  if (turk.projectId && memoryCategories.length > 0) {
+    memoryEntries = await prisma.memoryEntry.findMany({
+      where: {
+        projectId: turk.projectId,
+        category: { in: memoryCategories },
+      },
+      select: {
+        category: true,
+        title: true,
+        content: true,
+        sourceUrl: true,
+      },
+      orderBy: { createdAt: "asc" },
+    });
+  }
+
   try {
     await prisma.turk.update({
       where: { id: turk.id },
@@ -71,6 +91,7 @@ export async function POST(
       credentials,
       projectObjective,
       turkRole: turk.role,
+      memoryEntries,
     });
 
     await prisma.turk.update({

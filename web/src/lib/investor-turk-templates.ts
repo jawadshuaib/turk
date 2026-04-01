@@ -7,16 +7,17 @@ export interface InvestorTurkTemplate {
   role: string;
   instructions: string;
   description: string;
+  memoryInputCategories?: string[];
 }
 
 export const INVESTOR_TURK_TEMPLATES: InvestorTurkTemplate[] = [
   {
-    id: "seekingalpha-news",
-    name: "SeekingAlpha News Reader",
-    defaultUrl: `https://seekingalpha.com/symbol/${STOCK_SYMBOL_PLACEHOLDER}/news`,
+    id: "yahoo-finance-news",
+    name: `${STOCK_SYMBOL_PLACEHOLDER} Yahoo Finance News`,
+    defaultUrl: `https://finance.yahoo.com/quote/${STOCK_SYMBOL_PLACEHOLDER}/news/`,
     role: "News Monitor",
-    description: "Monitors SeekingAlpha for the latest news articles about the stock.",
-    instructions: `You are a financial news research agent. Your task is to gather the latest news about ${STOCK_SYMBOL_PLACEHOLDER} from SeekingAlpha.
+    description: "Gathers the latest news articles and headlines from Yahoo Finance.",
+    instructions: `You are a financial news research agent. Your task is to gather the latest news about ${STOCK_SYMBOL_PLACEHOLDER} from Yahoo Finance.
 
 ## What to collect
 - Headlines of recent news articles (last 30 days)
@@ -28,7 +29,7 @@ export const INVESTOR_TURK_TEMPLATES: InvestorTurkTemplate[] = [
 - The page shows a news feed for ${STOCK_SYMBOL_PLACEHOLDER}
 - Scroll through the news list to find recent articles
 - Click into articles to read key details — focus on the first few paragraphs and any highlighted quotes
-- Look for articles tagged as "Breaking" or "Market Moving"
+- Look for articles about earnings, guidance, and major business events
 
 ## How to report
 Use the project_memory tool for EVERY useful finding:
@@ -38,37 +39,6 @@ Use the project_memory tool for EVERY useful finding:
 - Include the article URL as sourceUrl
 
 Be thorough — capture every article you can find. The investment report depends on comprehensive news coverage.`,
-  },
-  {
-    id: "seekingalpha-analysis",
-    name: "SeekingAlpha Analyst",
-    defaultUrl: `https://seekingalpha.com/symbol/${STOCK_SYMBOL_PLACEHOLDER}/analysis`,
-    role: "Analyst Report Reader",
-    description: "Reads analyst reports and opinion pieces about the stock.",
-    instructions: `You are a financial analysis research agent. Your task is to gather analyst opinions and deep-dive articles about ${STOCK_SYMBOL_PLACEHOLDER} from SeekingAlpha's Analysis section.
-
-## What to collect
-- Analyst article titles and their bull/bear thesis
-- Price targets mentioned by analysts
-- Key metrics analysts focus on (P/E, EV/EBITDA, revenue growth, etc.)
-- Risk factors highlighted by analysts
-- Comparisons to competitors mentioned in articles
-
-## How to navigate
-- The page shows analysis articles for ${STOCK_SYMBOL_PLACEHOLDER}
-- Click into each article to read the thesis
-- Focus on the summary/conclusion sections for the core argument
-- Look at the author's track record if displayed (Success Rate, Average Return)
-
-## How to report
-Use the project_memory tool for EVERY useful finding:
-- Category: "analyst_report" for full article summaries
-- Category: "risk_factor" for identified risks
-- Category: "valuation" for price targets and valuation metrics
-- Include the analyst's name and the article date in the content
-- Include the article URL as sourceUrl
-
-Prioritize recent articles (last 3 months). Capture both bullish and bearish perspectives.`,
   },
   {
     id: "stockanalysis-financials",
@@ -102,39 +72,6 @@ Use the project_memory tool for EVERY useful finding:
 Extract raw numbers — do not interpret or analyze. The report generator will handle the analysis.`,
   },
   {
-    id: "m4th-valuation",
-    name: "M4th.com Valuation Researcher",
-    defaultUrl: `https://m4th.com/report/${STOCK_SYMBOL_PLACEHOLDER}/-`,
-    role: "Valuation Analyst",
-    description: "Extracts intrinsic valuation data, DCF models, and peer comparisons from M4th.com.",
-    instructions: `You are a valuation research agent. Your task is to gather valuation data for ${STOCK_SYMBOL_PLACEHOLDER} from M4th.com.
-
-## What to collect
-- Intrinsic value estimate and the methodology used
-- Current price vs. intrinsic value (margin of safety)
-- DCF model inputs: growth rate, terminal growth rate, discount rate
-- Revenue and earnings projections used in the model
-- Peer comparison: how ${STOCK_SYMBOL_PLACEHOLDER} compares to industry peers on valuation metrics
-- Value Investor Score and Overall Score
-- Historical valuation trends if available
-
-## How to navigate
-- The report page shows a comprehensive valuation overview
-- Scroll through the page to find each section
-- Look for the valuation table with projected cash flows
-- Find the peer comparison section
-- Check for any charts showing historical valuation
-
-## How to report
-Use the project_memory tool for EVERY useful finding:
-- Category: "valuation" for intrinsic value, DCF data, and peer comparisons
-- Category: "financial_data" for raw financial projections
-- Include exact numbers and the date of the data
-- Include the page URL as sourceUrl
-
-Be precise with numbers — valuation data must be exact for the investment report.`,
-  },
-  {
     id: "company-website",
     name: "Company Website Researcher",
     defaultUrl: `https://www.google.com/search?q=${STOCK_SYMBOL_PLACEHOLDER}+investor+relations`,
@@ -166,13 +103,51 @@ Use the project_memory tool for EVERY useful finding:
 
 Focus on recent information that would impact an investment decision.`,
   },
+  {
+    id: "deep-dive-news",
+    name: "News Deep Dive",
+    defaultUrl: "https://www.google.com",
+    role: "Deep Dive News Researcher",
+    description: "Reads news headlines from the memory bank and visits each link to extract full article content.",
+    memoryInputCategories: ["news"],
+    instructions: `You are a deep-dive news research agent. Your task is to take existing news headlines and expand them into full, detailed articles by visiting the original source URLs.
+
+## How This Works
+- A file called RESEARCH_DATA.md has been placed in your workspace
+- It contains news headlines and source URLs that were previously collected by another research agent
+- Your job is to visit each Source URL, read the full article, and save the complete content
+- The project objective and company context are provided separately — use them to understand what you're researching
+
+## Step-by-Step Process
+1. Read RESEARCH_DATA.md to see all the news entries you need to expand
+2. For each entry that has a Source URL:
+   a. Navigate to the Source URL using the browser
+   b. Take a snapshot to understand the page layout
+   c. Read the full article content — paragraphs, quotes, data points, numbers
+   d. Save the enriched content using the project_memory tool
+3. Skip entries that have no Source URL
+4. When done with all entries, provide a final summary using turk_report
+
+## How to Report
+Use the project_memory tool for EVERY article you successfully read:
+- Category: "news_detail"
+- Title: Use the original headline, prefixed with "[Deep Dive]"
+- Content: Include the FULL article text — key paragraphs, direct quotes, specific numbers, dates, and analyst names mentioned. Do NOT just re-summarize the headline. The goal is to capture everything a human would get from reading the article.
+- sourceUrl: The URL you visited
+
+## Important
+- If a page requires a login or paywall blocks the content, note this in your finding and move on
+- If a page has redirected or the article is no longer available, skip it
+- Do NOT fabricate content — only report what you actually read on the page
+- Be thorough: the investment report depends on having full article details, not just headlines`,
+  },
 ];
 
 // The top 3 suggested turks for new investor projects
 export const SUGGESTED_TURK_IDS = [
-  "seekingalpha-news",
+  "yahoo-finance-news",
   "stockanalysis-financials",
-  "m4th-valuation",
+  "deep-dive-news",
 ];
 
 export function resolveSymbol(template: string, ticker: string): string {

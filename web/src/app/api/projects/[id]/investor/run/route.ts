@@ -86,10 +86,8 @@ export async function POST(
     data: { lastRunAt: new Date() },
   });
 
-  await prisma.project.update({
-    where: { id: projectId },
-    data: { status: "completed" },
-  });
+  // Project completion is handled by server.js when all turks finish
+  // Don't mark completed here — turks may still be running
 
   return NextResponse.json({
     ok: true,

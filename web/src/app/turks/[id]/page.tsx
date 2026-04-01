@@ -5,6 +5,7 @@ import { TurkControls } from "@/components/turk-controls";
 import { TurkChat } from "@/components/turk-chat";
 import { TurkInstructions } from "@/components/turk-instructions";
 import { TurkAvatar } from "@/components/turk-avatar";
+import { TurkModelSelector } from "@/components/turk-model-selector";
 
 export const dynamic = "force-dynamic";
 
@@ -171,15 +172,11 @@ export default async function TurkDetailPage({
                   <span className="text-indigo-600">{turk.role}</span>
                 </p>
               )}
-              <p className="text-slate-500">
-                Model:{" "}
-                <span className="text-slate-700">{turk.ollamaModel}</span>
-                {turk.modelSource === "cloud" && (
-                  <span className="ml-1.5 text-xs bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded">
-                    cloud
-                  </span>
-                )}
-              </p>
+              <TurkModelSelector
+                turkId={turk.id}
+                initialModel={turk.ollamaModel}
+                initialSource={turk.modelSource}
+              />
               <p className="text-slate-500">
                 Type: <span className="text-slate-700">{turk.type}</span>
               </p>

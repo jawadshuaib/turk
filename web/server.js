@@ -233,20 +233,59 @@ async function handleMessage(msg, senderRole, turkId) {
             })
             .catch(() => {});
 
-          // Auto-complete project when all turks are done
+          // Two-phase auto-start: when all producers finish, start consumers
           try {
             const turkRecord = await prisma.turk.findUnique({
               where: { id: turkId },
-              select: { projectId: true },
+              select: { projectId: true, metadata: true },
             });
             if (turkRecord?.projectId) {
-              const remaining = await prisma.turk.count({
-                where: {
-                  projectId: turkRecord.projectId,
-                  status: { in: ["running", "starting", "paused"] },
-                },
+              const projectTurks = await prisma.turk.findMany({
+                where: { projectId: turkRecord.projectId },
+                select: { id: true, status: true, metadata: true },
               });
-              if (remaining === 0) {
+
+              const isConsumer = (meta) =>
+                meta && typeof meta === "object" && Array.isArray(meta.memoryInputCategories) && meta.memoryInputCategories.length > 0;
+
+              const producers = projectTurks.filter((t) => !isConsumer(t.metadata));
+              const consumers = projectTurks.filter((t) => isConsumer(t.metadata));
+
+              const completedTurkIsProducer = !isConsumer(turkRecord.metadata);
+              const activeProducers = producers.filter((t) =>
+                ["running", "starting", "paused"].includes(t.status)
+              );
+
+              // If a producer just finished and no producers remain active, start consumers
+              if (completedTurkIsProducer && activeProducers.length === 0 && consumers.length > 0) {
+                const stoppedConsumers = consumers.filter((t) => t.status === "stopped");
+                for (const consumer of stoppedConsumers) {
+                  try {
+                    console.log(`[WS] Auto-starting consumer turk ${consumer.id}`);
+                    broadcastToBrowsers(consumer.id, {
+                      type: "agent_update",
+                      turkId: consumer.id,
+                      data: { kind: "status", status: "starting" },
+                    });
+                    const startRes = await fetch(`http://localhost:${port}/api/turks/${consumer.id}/start`, {
+                      method: "POST",
+                    });
+                    if (!startRes.ok) {
+                      console.error(`[WS] Failed to auto-start consumer ${consumer.id}: ${startRes.status}`);
+                    }
+                    // Small delay between starts to avoid overwhelming Docker
+                    await new Promise((r) => setTimeout(r, 1000));
+                  } catch (startErr) {
+                    console.error(`[WS] Error auto-starting consumer ${consumer.id}:`, startErr.message);
+                  }
+                }
+              }
+
+              // Auto-complete project when ALL turks (producers + consumers) are done
+              const allActive = projectTurks.filter((t) =>
+                ["running", "starting", "paused"].includes(t.status)
+              );
+              if (allActive.length === 0) {
                 await prisma.project.updateMany({
                   where: { id: turkRecord.projectId, status: "in_progress" },
                   data: { status: "completed" },
@@ -254,7 +293,7 @@ async function handleMessage(msg, senderRole, turkId) {
               }
             }
           } catch (err) {
-            console.error("[WS] Error auto-completing project:", err.message);
+            console.error("[WS] Error in turk completion handler:", err.message);
           }
 
           activeRuns.delete(turkId);

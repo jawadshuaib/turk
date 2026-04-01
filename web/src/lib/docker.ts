@@ -17,6 +17,7 @@ interface StartConfig {
   credentials: Record<string, Record<string, string>>;
   projectObjective?: string;
   turkRole?: string;
+  memoryEntries?: Array<{ category: string; title: string; content: string; sourceUrl: string | null }>;
 }
 
 function hostify(url: string): string {
@@ -64,6 +65,9 @@ export async function startTurkContainer(
   }
   if (config.turkRole) {
     env.push(`TURK_ROLE_B64=${Buffer.from(config.turkRole).toString("base64")}`);
+  }
+  if (config.memoryEntries && config.memoryEntries.length > 0) {
+    env.push(`MEMORY_ENTRIES_B64=${Buffer.from(JSON.stringify(config.memoryEntries)).toString("base64")}`);
   }
 
   // Pass API key for cloud models (from DB or env)
